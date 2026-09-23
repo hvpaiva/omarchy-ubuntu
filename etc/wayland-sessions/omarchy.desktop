@@ -1,7 +1,6 @@
 [Desktop Entry]
 Name=Omarchy (Hyprland uwsm)
-Comment=Omarchy 4 on Ubuntu: Hyprland managed by uwsm (upstream's session model)
-Exec=bash -lc 'exec >>/tmp/omarchy-session.log 2>&1; date; exec uwsm start -g -1 -e -D Hyprland hyprland.desktop'
+Comment=Omarchy Hyprland session managed by uwsm
+Exec=uwsm start -g -1 -e -D Hyprland hyprland.desktop
 TryExec=uwsm
 Type=Application
-DesktopNames=Hyprland

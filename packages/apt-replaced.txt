@@ -8,3 +8,5 @@ hyprpolkitagent
 swaybg
 wlogout
 xdg-desktop-portal-gnome
+ulauncher
+fuzzel
