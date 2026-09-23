@@ -24,6 +24,7 @@ foot
 grim
 slurp
 wl-clipboard
+ddcutil
 wtype
 imagemagick
 tesseract-ocr

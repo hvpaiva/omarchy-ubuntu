@@ -54,6 +54,21 @@ else
   note "no fingerprint enrolled: fingerprint stacks skipped (enroll with fprintd-enroll and rerun)"
 fi
 
+log "brightness: video and i2c groups, keyboard backlight writable by video, i2c-dev for DDC"
+# brightnessctl's Ubuntu udev rules hand the display backlight to the video group
+# and keyboard LEDs to the input group; the latter also exposes every input
+# device, so the LEDs go to video instead. External monitors use ddcutil over
+# i2c (upstream adds the user to i2c the same way).
+usermod -aG video,i2c "$OMARCHY_USER"
+install_file 644 /etc/udev/rules.d/90-omarchy-backlight.rules <"$REPO_DIR/etc/udev/rules.d/90-omarchy-backlight.rules"
+install_file 644 /etc/modules-load.d/i2c-dev.conf <<'EOF'
+i2c-dev
+EOF
+modprobe i2c-dev 2>/dev/null || true
+udevadm control --reload 2>/dev/null || true
+udevadm trigger -s leds -s backlight -c add 2>/dev/null || true
+note "group membership applies at the next login"
+
 if [[ -x $LOCAL_BIN/gsr-kms-server ]]; then
   log "cap_sys_admin on gsr-kms-server (screen recording without a root prompt)"
   setcap cap_sys_admin+ep "$LOCAL_BIN/gsr-kms-server"
