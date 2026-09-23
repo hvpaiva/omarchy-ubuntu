@@ -43,7 +43,8 @@ from_upstream() { install_file "$1" "/$2" <"$OMARCHY_PATH/$2"; }
 
 log "logind: power key opens Omarchy's power menu instead of powering off"
 from_upstream 644 etc/systemd/logind.conf.d/10-ignore-power-button.conf
-from_upstream 644 etc/systemd/logind.conf.d/20-inhibit-delay.conf
+install_file 644 /etc/systemd/logind.conf.d/zz-omarchy-inhibit-delay.conf <"$OMARCHY_PATH/etc/systemd/logind.conf.d/20-inhibit-delay.conf"
+rm -f /etc/systemd/logind.conf.d/20-inhibit-delay.conf
 
 log "systemd: faster shutdown, higher open-file limits, oomd tuning"
 from_upstream 644 etc/systemd/system.conf.d/10-faster-shutdown.conf
@@ -64,6 +65,10 @@ log "kernel: inotify watches, USB autosuspend off"
 from_upstream 644 etc/sysctl.d/90-omarchy-file-watchers.conf
 from_upstream 644 etc/sysctl.d/99-omarchy-sysctl.conf
 from_upstream 644 etc/modprobe.d/omarchy-usb-autosuspend.conf
+install_file 644 /etc/tmpfiles.d/omarchy-usb-autosuspend.conf <<'EOF'
+w /sys/module/usbcore/parameters/autosuspend - - - - -1
+EOF
+systemd-tmpfiles --create /etc/tmpfiles.d/omarchy-usb-autosuspend.conf >/dev/null 2>&1 || true
 sysctl -q --system >/dev/null 2>&1 || true
 
 log "sudo: more password tries, passwordless timezone and DNS toggles"
