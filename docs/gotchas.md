@@ -1,0 +1,21 @@
+# Gotchas found while porting
+
+Each of these cost real time. They are encoded in the scripts; this is the why.
+
+- **`wl_fixes` build error in Quickshell.** Qt 6.10+'s private `qwayland-wayland.h` declares `wl_fixes`, which only exists in the header generated from libwayland 1.23+'s `wayland.xml`. Noble has 1.22. The generated header and the system one share the `WAYLAND_CLIENT_PROTOCOL_H` guard, so a newer generated copy in a compat include dir shadows the system one at compile time. Nothing needs `wl_fixes` at runtime.
+- **The direct GDM entry has no login shell.** `start-hyprland` launched by GDM never sources `/etc/profile.d`, so `OMARCHY_PATH` is unset, upstream's `envs.lua` writes the `/usr/share/omarchy` fallback and the shell starts from that path. `omarchy-shell` matches the Quickshell instance by `-p <path>`, so terminals (login shells, dev-link path) and hotkeys could not reach it. `hyprland.lua` reads `/etc/omarchy.conf` itself and sets `OMARCHY_PATH` and `PATH` after the defaults, because the last `hl.env` wins and `os.getenv` does not see an `hl.env` from the same parse.
+- **`hyprctl dispatch exec` does not exist with a Lua config.** Use `hyprctl dispatch 'hl.dsp.exec_cmd("cmd")'`.
+- **uwsm loads `~/.config/uwsm/env` with `/bin/sh`.** `source`, `&>` and `eval "$(mise activate bash)"` break under dash; the env preloader fails silently, `wayland-wm@` never starts and GDM loops on the password prompt. Keep the file POSIX (`. file`, `>/dev/null 2>&1`, `mise env -s bash` prints plain exports).
+- **`uwsm check may-start` fails from GDM.** It expects a TTY login shell; a session entry must call `uwsm start` directly.
+- **Two units with the same bus name break `daemon-reload`.** mako and swaync both claim `org.freedesktop.Notifications`; the reload uwsm triggers logged errors and dependency jobs were dropped. Mask both (the shell owns notifications).
+- **Migrations state starts empty.** With no markers, `omarchy-migrate` runs every migration ever shipped, several through pacman. A fresh install has them all marked; the bootstrap does the same.
+- **First-run repeats every login until every step succeeds.** One of its steps enables `omarchy-fcitx5.service`; if that unit is missing the whole first-run stays unmarked and the "Update System" toast returns each boot.
+- **Polkit picked another admin.** Ubuntu's admin identities are `unix-group:sudo`; the shell's agent uses the first identity offered, which on a multi-admin machine is not you. A `polkit.addAdminRule` returning `unix-user:<subject.user>` fixes it.
+- **The polkit dialog hides fingerprint mode without `/etc/pam.d/polkit-1`.** The agent reads that file and looks for an `auth ... pam_fprintd.so` line; Ubuntu's `@include common-auth` is not visible to it. Ubuntu's `pam_fprintd` also runs with `timeout=10`, so typing a password waits for the sensor to give up; touching the sensor is the intended gesture, as upstream.
+- **`pkill -f` matches your own command line.** Testing scripts that `pgrep -f` a window class from a shell whose command line contains that class returns your own shell. Run such tests from a script file, or use `[o]marchy` bracket patterns.
+- **`omarchy-theme-set-browser-policy` re-execs `/usr/bin/omarchy-theme-set-browser-policy`.** With a checkout elsewhere the sudoers rule never matches; a root-owned copy in `/usr/bin` plus a `%sudo` rule is the fix.
+- **`omarchy-system-logout` only knows `uwsm stop`.** Under the direct entry it closes windows and stays; the fork exits Hyprland when uwsm is absent.
+- **Keyboard layout comes from `/etc/vconsole.conf`.** On Ubuntu that is a symlink to `/etc/default/keyboard`, whose `XKBLAYOUT` is what the installer picked, and `localectl set-x11-keymap` is refused on Debian. Edit the file.
+- **Go audio bindings and libghostty.** cliamp needs alsa/ogg/vorbis/flac/opus/mpg123/lame/sndfile headers; herdr vendors libghostty-vt and needs zig 0.15.
+- **Qt Quick apps use qmake.** `qmake6` from the aqt tree adds an RPATH to the Qt lib dir; omacut needs the `qtmultimedia` module (with its bundled FFmpeg).
+- **`hyprland-preview-share-picker` needs its protocol submodule.** A shallow clone without `git submodule update --init` fails with "proc macro panicked" in `wayland_scanner`.

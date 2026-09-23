@@ -1,0 +1,7 @@
+# Machine-local state kept next to the repo, never versioned.
+from-zeus/
+.applied/
+hypr/
+*.bak
+*.bak-*
+downloads/

@@ -1,0 +1,15 @@
+#%PAM-1.0
+# Polkit with fingerprint (Ubuntu, omarchy-ubuntu). Mirrors the /etc/pam.d/polkit-1
+# that omarchy-setup-security-fingerprint writes on Arch: clamshell gate,
+# fingerprint, password. No @include common-auth, which would run pam_fprintd
+# twice. The omarchy-shell polkit dialog reads this file and only shows its
+# fingerprint mode when an "auth ... pam_fprintd.so" line is present.
+auth    [success=1 default=ignore]      pam_exec.so quiet /usr/share/omarchy/bin/omarchy-hw-laptop-closed
+auth    sufficient                      pam_fprintd.so
+auth    [success=2 default=ignore]      pam_unix.so nullok try_first_pass
+auth    [success=1 default=ignore]      pam_sss.so use_first_pass
+auth    requisite                       pam_deny.so
+auth    required                        pam_permit.so
+@include common-account
+@include common-password
+@include common-session

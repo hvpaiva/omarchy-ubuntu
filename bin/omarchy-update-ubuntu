@@ -1,0 +1,198 @@
+#!/bin/bash
+
+# Omarchy update for the Ubuntu port. Upstream's omarchy-update is pacman end to
+# end (pkg-prune, keyring, system-pkgs, aur, orphans, snapshot); the fork hands
+# off to this script when there is no pacman. Steps: fetch the new upstream tag
+# and rebase the `ubuntu` branch (the fork's patches) on it, run new migrations
+# with a review of the Arch-only ones, post-update hooks, pieces that live
+# outside the checkout (browser policy helper in /usr/bin, sudoers, user units),
+# reload Hyprland and restart the shell. It lives outside the checkout on
+# purpose: bash reads scripts incrementally and a rebase mid-run would corrupt it.
+#
+#   omarchy-update-ubuntu [tag]     (default: the newest v* tag on origin)
+
+set -euo pipefail
+
+OMARCHY_PATH=${OMARCHY_PATH:-/usr/share/omarchy}
+PORT_DIR=${OMARCHY_UBUNTU_DIR:-$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
+STATE_DIR=$HOME/.local/state/omarchy/migrations
+LOG=/tmp/omarchy-update.log
+BRANCH=ubuntu
+OMARCHY_UNITS="bt-agent.service omarchy-sleep-lock.service omarchy-crash-watch.service omarchy-recover-internal-monitor.service omarchy-tailscale-receive.service omarchy-migrate-notify.service omarchy-fcitx5.service"
+
+if [[ -z ${OMARCHY_UPDATE_LOGGED:-} ]]; then
+  script_command=$(printf '%q ' "$0" "$@")
+  exec env OMARCHY_UPDATE_LOGGED=1 script -qefc "$script_command" "$LOG"
+fi
+
+if ! omarchy-update-lock held; then
+  exec omarchy-update-lock run "$0" "$@"
+fi
+
+trap 'echo -e "\n\033[0;31mSomething went wrong during the update. Review the output above (log in '"$LOG"').\033[0m"' ERR
+trap 'omarchy-update-stay-awake stop' EXIT
+
+run_root() {
+  if [[ -t 0 ]]; then
+    sudo "$@"
+  elif command -v pkexec >/dev/null 2>&1; then
+    pkexec "$@"
+  else
+    sudo ${SUDO_ASKPASS:+-A} "$@"
+  fi
+}
+
+step() {
+  echo -e "\n\e[32m$*\e[0m"
+}
+
+[[ $OMARCHY_PATH != /usr/share/omarchy ]] || {
+  echo "OMARCHY_PATH points at /usr/share/omarchy; the port expects the dev link (/etc/omarchy.conf)." >&2
+  exit 1
+}
+git -C "$OMARCHY_PATH" rev-parse --is-inside-work-tree >/dev/null
+
+if [[ -n $(git -C "$OMARCHY_PATH" status --porcelain) ]]; then
+  echo "The checkout at $OMARCHY_PATH has uncommitted changes. Commit or discard them before updating." >&2
+  git -C "$OMARCHY_PATH" status --short >&2
+  exit 1
+fi
+
+current_branch=$(git -C "$OMARCHY_PATH" branch --show-current)
+[[ $current_branch == "$BRANCH" ]] || {
+  echo "Current branch is '$current_branch', expected '$BRANCH'." >&2
+  exit 1
+}
+
+step "Fetching upstream tags"
+git -C "$OMARCHY_PATH" fetch --quiet --tags origin
+base_before=$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)
+target=${1:-$(git -C "$OMARCHY_PATH" tag --list 'v*' --sort=-v:refname | head -n1)}
+echo "Current base: $base_before   Target: $target"
+
+if [[ $base_before != "$target" ]]; then
+  gum style --border normal --padding "1 2" \
+    "Update Omarchy $base_before -> $target" \
+    "" \
+    "• rebase of the $BRANCH branch patches" \
+    "• new migrations reviewed one by one" \
+    "• shell restarted at the end" \
+    "" \
+    "What's new: https://github.com/omacom/omarchy/releases/tag/$target"
+  echo
+  if [[ ${OMARCHY_UPDATE_UNATTENDED:-} != 1 ]] && ! gum confirm "Continue?"; then
+    echo "Cancelled"
+    exit 0
+  fi
+
+  omarchy-update-stay-awake start
+
+  step "Rebasing $BRANCH onto $target"
+  if ! git -C "$OMARCHY_PATH" rebase --quiet "$target"; then
+    echo -e "\n\e[31mRebase conflict. Resolve it in $OMARCHY_PATH (git status; git rebase --continue) and run omarchy-update-ubuntu again.\e[0m" >&2
+    exit 1
+  fi
+  echo "Port patches on top of $target: $(git -C "$OMARCHY_PATH" rev-list --count "$target..$BRANCH")"
+else
+  echo "The checkout is already at $target."
+  omarchy-update-stay-awake start
+fi
+
+step "Migrations"
+mkdir -p "$STATE_DIR"
+pending=$(omarchy-migrate --pending || true)
+if [[ -z $pending ]]; then
+  echo "None pending."
+else
+  arch_only='pacman|yay|paru|makepkg|mkinitcpio|limine|systemd-boot|/etc/pacman'
+  while IFS= read -r name; do
+    [[ -n $name ]] || continue
+    file=$OMARCHY_PATH/migrations/$name
+    marker=$STATE_DIR/$name
+    if grep -qE "$arch_only" "$file"; then
+      echo -e "\n\e[33m${name%.sh} uses pacman or Arch boot tooling:\e[0m"
+      grep -vE '^\s*(#|$)' "$file" | head -20
+      echo
+      if [[ ${OMARCHY_UPDATE_UNATTENDED:-} == 1 ]]; then
+        echo "Left pending (-y mode)."
+        continue
+      fi
+      choice=$(gum choose --header "What to do with ${name%.sh}?" \
+        "Mark as done (do not run)" "Run anyway" "Leave pending")
+      case $choice in
+        "Mark as done (do not run)")
+          touch "$marker"
+          echo "Marked as done."
+          ;;
+        "Run anyway")
+          OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$file"
+          touch "$marker"
+          ;;
+        *)
+          echo "Left pending."
+          ;;
+      esac
+    else
+      echo -e "\e[32mRunning migration (${name%.sh})\e[0m"
+      OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$file"
+      touch "$marker"
+    fi
+  done <<<"$pending"
+fi
+
+step "Post-update hooks"
+omarchy-hook post-update
+
+step "Pieces outside the checkout"
+# /etc/sudoers.d is not readable by the user, so the comparison uses the copy
+# of the upstream file saved when it was last applied.
+applied_dir=$PORT_DIR/.applied
+mkdir -p "$applied_dir"
+if ! cmp -s "$OMARCHY_PATH/bin/omarchy-theme-set-browser-policy" /usr/bin/omarchy-theme-set-browser-policy ||
+  ! cmp -s "$OMARCHY_PATH/etc/sudoers.d/omarchy-theme-browser" "$applied_dir/omarchy-theme-browser"; then
+  echo "Browser policy helper or sudoers changed upstream; reapplying (root)."
+  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/70-browser-policy-root.sh"
+else
+  echo "Browser policy helper and sudoers match the checkout."
+fi
+
+units_changed=0
+for u in $OMARCHY_UNITS; do
+  src=$OMARCHY_PATH/default/systemd/user/$u
+  dst=$HOME/.config/systemd/user/$u
+  [[ -f $src ]] || continue
+  if ! sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" | cmp -s - "$dst"; then
+    sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" >"$dst"
+    echo "unit updated: $u"
+    units_changed=1
+  fi
+done
+if (( units_changed )); then
+  systemctl --user daemon-reload
+else
+  echo "User units match the checkout."
+fi
+
+step "Hyprland and shell"
+if Hyprland --verify-config >/dev/null 2>&1; then
+  hyprctl reload >/dev/null
+else
+  echo -e "\e[33mHyprland --verify-config failed; check ~/.config/hypr/*.lua before hyprctl reload.\e[0m"
+fi
+omarchy-restart-shell
+sleep 3
+shell_errors=$(journalctl --user -t omarchy-shell --since "-15s" --no-pager -o cat 2>/dev/null | grep -v IpcHandler | grep -iE "error|not a type|is not available|unavailable" | head -5 || true)
+if [[ -n $shell_errors ]]; then
+  echo -e "\e[33mThe shell logged QML errors:\e[0m"
+  echo "$shell_errors"
+  echo -e "\e[33mIf upstream raised the minimum Quickshell version, rebuild it: $PORT_DIR/bootstrap.sh 40\e[0m"
+fi
+
+omarchy-update-stay-awake stop
+trap - EXIT
+
+echo
+echo "Omarchy $(omarchy-version) at $target."
+if [[ ${OMARCHY_UPDATE_UNATTENDED:-} != 1 ]]; then
+  omarchy-show-done
+fi

@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=update-notifier
+Hidden=true
+# Ubuntu GNOME autostart; the Omarchy shell provides the tray network panel and update notices.
