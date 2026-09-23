@@ -65,6 +65,7 @@ if ! grep -q wayland-diagnose-other "$cfg/fcitx5/conf/notifications.conf" 2>/dev
 fi
 mkdir -p "$cfg/hyprland-preview-share-picker"
 [[ -f $cfg/hyprland-preview-share-picker/config.yaml ]] || cp "$OMARCHY_PATH/config/hyprland-preview-share-picker/config.yaml" "$cfg/hyprland-preview-share-picker/"
+sed -i "s#^  command: slurp -f .*#  command: omarchy-share-picker-region#" "$cfg/hyprland-preview-share-picker/config.yaml"
 mkdir -p "$cfg/btop/themes"
 ln -sfn "$OMARCHY_HOME/.local/state/omarchy/current/theme/btop.theme" "$cfg/btop/themes/current.theme"
 [[ -f $cfg/btop/btop.conf ]] && sed -i 's/^color_theme = .*/color_theme = "current"/' "$cfg/btop/btop.conf"
