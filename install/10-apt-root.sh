@@ -17,6 +17,21 @@ mapfile -t build < <(read_list "$REPO_DIR/packages/apt-build.txt")
 log "apt packages"
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "${runtime[@]}" "${build[@]}"
 
+mapfile -t replaced < <(read_list "$REPO_DIR/packages/apt-replaced.txt")
+present=()
+for p in "${replaced[@]}"; do
+  apt_installed "$p" && present+=("$p")
+done
+if ((${#present[@]})); then
+  log "packages the shell replaces: ${present[*]}"
+  extra=$(LC_ALL=C apt-get -s purge "${present[@]}" | awk '$1 == "Purg" || $1 == "Remv" {print $2}' | grep -vxF -f <(printf '%s\n' "${present[@]}") || true)
+  if [[ -n $extra ]]; then
+    warn "purging them would also remove $(tr '\n' ' ' <<<"$extra"); left installed, 65-session.sh masks their units"
+  else
+    DEBIAN_FRONTEND=noninteractive apt-get purge -y "${present[@]}"
+  fi
+fi
+
 # ImageMagick 6 has no `magick` entry point; Omarchy scripts call `magick`.
 if ! have magick; then
   install -Dm755 /dev/stdin /usr/local/bin/magick <<'EOF'
