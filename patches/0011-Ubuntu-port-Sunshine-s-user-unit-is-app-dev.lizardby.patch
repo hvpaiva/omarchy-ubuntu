@@ -1,0 +1,59 @@
+From ac4e8f45871dcd9f4f2e65d0fc279301c525bc74 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Wed, 23 Sep 2026 11:50:14 -0300
+Subject: [PATCH 11/11] Ubuntu port: Sunshine's user unit is
+ app-dev.lizardbyte.app.Sunshine
+
+LizardByte's Ubuntu .deb ships the user unit under its app id, not as sunshine.service.
+---
+ bin/omarchy-install-service-sunshine | 4 +++-
+ bin/omarchy-remove-service-sunshine  | 4 +++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/bin/omarchy-install-service-sunshine b/bin/omarchy-install-service-sunshine
+index c215584b..51f528bd 100755
+--- a/bin/omarchy-install-service-sunshine
++++ b/bin/omarchy-install-service-sunshine
+@@ -15,6 +15,8 @@ SUNSHINE_ADMIN_EXEC="omarchy-launch-webapp $SUNSHINE_ADMIN_URL --ignore-certific
+ SUNSHINE_ICON_SOURCE="/usr/share/sunshine/web/images/logo-sunshine-45.png"
+ HYPR_AUTOSTART_FILE="$HOME/.config/hypr/autostart.lua"
+ HYPR_AUTOSTART_ENTRY='o.launch_on_start("sunshine")'
++SUNSHINE_UNIT=sunshine
++omarchy-cmd-present pacman || SUNSHINE_UNIT=app-dev.lizardbyte.app.Sunshine
+ 
+ open_ufw_port_for_private_lans() {
+   local proto="$1"
+@@ -71,7 +73,7 @@ enable_hyprland_autostart() {
+ 
+ echo "Installing Sunshine..."
+ omarchy-pkg-add sunshine
+-systemctl --user enable --now sunshine
++systemctl --user enable --now "$SUNSHINE_UNIT"
+ 
+ echo "Opening Sunshine firewall ports..."
+ open_ufw_ports
+diff --git a/bin/omarchy-remove-service-sunshine b/bin/omarchy-remove-service-sunshine
+index e9976222..9370257a 100755
+--- a/bin/omarchy-remove-service-sunshine
++++ b/bin/omarchy-remove-service-sunshine
+@@ -11,6 +11,8 @@ PRIVATE_CIDRS=(10.0.0.0/8 172.16.0.0/12 192.168.0.0/16)
+ SUNSHINE_ADMIN_APP="Sunshine Admin"
+ HYPR_AUTOSTART_FILE="$HOME/.config/hypr/autostart.lua"
+ HYPR_AUTOSTART_ENTRY='o.launch_on_start("sunshine")'
++SUNSHINE_UNIT=sunshine
++omarchy-cmd-present pacman || SUNSHINE_UNIT=app-dev.lizardbyte.app.Sunshine
+ 
+ delete_ufw_rule() {
+   sudo ufw --force delete "$@" >/dev/null 2>&1 || true
+@@ -59,7 +61,7 @@ disable_hyprland_autostart() {
+   fi
+ }
+ 
+-systemctl --user disable --now sunshine 2>/dev/null || true
++systemctl --user disable --now "$SUNSHINE_UNIT" 2>/dev/null || true
+ omarchy-pkg-drop sunshine
+ omarchy-webapp-remove "$SUNSHINE_ADMIN_APP" 2>/dev/null || true
+ disable_hyprland_autostart
+-- 
+2.43.0
+

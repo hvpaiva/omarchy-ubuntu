@@ -1,0 +1,81 @@
+From 07a0a340b3b33b243787413cf30d3bd7434dc7aa Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Wed, 23 Sep 2026 11:50:14 -0300
+Subject: [PATCH 10/11] Ubuntu port: PHP from Ubuntu's modules, xdebug in debug
+ mode through mods-available
+
+Ubuntu enables PHP extensions per package, so bcmath, intl and mysql come as php-* packages instead of edits to /etc/php/php.ini, which does not exist there. Removing PHP or Symfony goes through omarchy-pkg-drop instead of pacman.
+---
+ bin/omarchy-install-dev-env | 19 ++++++++++++++++++-
+ bin/omarchy-remove-dev-env  | 10 +++++++++-
+ 2 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/bin/omarchy-install-dev-env b/bin/omarchy-install-dev-env
+index 263fd755..06d05b6c 100755
+--- a/bin/omarchy-install-dev-env
++++ b/bin/omarchy-install-dev-env
+@@ -11,8 +11,20 @@ if [[ -z $1 ]]; then
+   exit 1
+ fi
+ 
++enable_php_xdebug_debug_mode() {
++  local xdebug_ini
++  xdebug_ini=$(compgen -G "/etc/php/*/mods-available/xdebug.ini" | head -1)
++  if [[ -n $xdebug_ini ]] && ! grep -q '^xdebug.mode' "$xdebug_ini"; then
++    echo 'xdebug.mode=debug' | sudo tee -a "$xdebug_ini" >/dev/null
++  fi
++}
++
+ install_php() {
+-  omarchy-pkg-add php composer php-sqlite xdebug
++  if omarchy-cmd-present pacman; then
++    omarchy-pkg-add php composer php-sqlite xdebug
++  else
++    omarchy-pkg-add php composer php-sqlite xdebug php-bcmath php-intl php-mysql
++  fi
+ 
+   # Install Path for Composer
+   if [[ :$PATH: != *:$HOME/.config/composer/vendor/bin:* ]]; then
+@@ -23,6 +35,11 @@ install_php() {
+     echo "Composer global bin directory already in PATH."
+   fi
+ 
++  if omarchy-cmd-missing pacman; then
++    enable_php_xdebug_debug_mode
++    return
++  fi
++
+   # Enable some extensions
+   local php_ini_path="/etc/php/php.ini"
+   local extensions_to_enable=(
+diff --git a/bin/omarchy-remove-dev-env b/bin/omarchy-remove-dev-env
+index 4551f1e1..22912b88 100755
+--- a/bin/omarchy-remove-dev-env
++++ b/bin/omarchy-remove-dev-env
+@@ -10,6 +10,10 @@ if [[ -z $1 ]]; then
+ fi
+ 
+ remove_php() {
++  if omarchy-cmd-missing pacman; then
++    omarchy-pkg-drop php composer php-sqlite xdebug php-bcmath php-intl php-mysql
++    return
++  fi
+   sudo pacman -Rns --noconfirm php composer php-sqlite xdebug 2>/dev/null || true
+ }
+ 
+@@ -50,7 +54,11 @@ laravel)
+   ;;
+ symfony)
+   echo -e "Removing Symfony CLI...\n"
+-  sudo pacman -Rns --noconfirm symfony-cli 2>/dev/null || true
++  if omarchy-cmd-missing pacman; then
++    omarchy-pkg-drop symfony-cli
++  else
++    sudo pacman -Rns --noconfirm symfony-cli 2>/dev/null || true
++  fi
+   ;;
+ python)
+   echo -e "Removing Python...\n"
+-- 
+2.43.0
+
