@@ -1,4 +1,4 @@
-From 1a66813c03a559441edd4810f3b4c09cc0cc660d Mon Sep 17 00:00:00 2001
+From 5ecd1589cd97d74d08471e6aae0a480d08cd81d6 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:55:23 -0300
 Subject: [PATCH 6/6] Ubuntu port: foot cursor colour in a [cursor] section
@@ -6,23 +6,28 @@ Subject: [PATCH 6/6] Ubuntu port: foot cursor colour in a [cursor] section
 foot 1.16 has no cursor key under [colors]; the colour lives in
 [cursor] color=<text> <cursor>, which every foot version accepts.
 ---
- default/themed/foot.ini.tpl | 3 ++-
- 1 file changed, 2 insertions(+), 1 deletion(-)
+ default/themed/foot.ini.tpl | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
 
 diff --git a/default/themed/foot.ini.tpl b/default/themed/foot.ini.tpl
-index ae766e07..3d91a1aa 100644
+index ae766e07..a6cfc5c6 100644
 --- a/default/themed/foot.ini.tpl
 +++ b/default/themed/foot.ini.tpl
-@@ -4,7 +4,8 @@ background={{ background_strip }}
+@@ -4,7 +4,6 @@ background={{ background_strip }}
  selection-foreground={{ selection_foreground_strip }}
  selection-background={{ selection_background_strip }}
  
 -cursor={{ background_strip }} {{ bright_foreground_strip }}
-+[cursor]
-+color={{ background_strip }} {{ bright_foreground_strip }}
  
  regular0={{ background_strip }}
  regular1={{ red_strip }}
+@@ -23,3 +22,6 @@ bright4={{ bright_blue_strip }}
+ bright5={{ bright_magenta_strip }}
+ bright6={{ bright_cyan_strip }}
+ bright7={{ bright_foreground_strip }}
++
++[cursor]
++color={{ background_strip }} {{ bright_foreground_strip }}
 -- 
 2.43.0
 
