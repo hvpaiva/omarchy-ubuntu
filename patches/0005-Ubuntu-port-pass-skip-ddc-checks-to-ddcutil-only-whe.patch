@@ -1,7 +1,7 @@
 From 5813949d718319cad577e750ab72d8714097d87e Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:52:07 -0300
-Subject: [PATCH 5/5] Ubuntu port: pass --skip-ddc-checks to ddcutil only when
+Subject: [PATCH 5/6] Ubuntu port: pass --skip-ddc-checks to ddcutil only when
  it exists
 
 Ubuntu 24.04 ships ddcutil 1.4, which rejects the option that ddcutil 2.0
