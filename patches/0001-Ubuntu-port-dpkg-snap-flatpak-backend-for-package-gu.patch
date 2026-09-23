@@ -1,7 +1,7 @@
 From f8e03c5e9ffd58f59014eb10c6df4505e4d03d06 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 20:26:40 -0300
-Subject: [PATCH 1/4] Ubuntu port: dpkg/snap/flatpak backend for package guards
+Subject: [PATCH 1/5] Ubuntu port: dpkg/snap/flatpak backend for package guards
  and helpers
 
 Without pacman every omarchy-pkg-present guard in the menu evaluated to
