@@ -1,0 +1,48 @@
+From 1840cebe8a1498b7f0fa312a3518f3c3917e280e Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Wed, 23 Sep 2026 09:38:38 -0300
+Subject: [PATCH] Ubuntu port: Plymouth through update-alternatives and
+ update-initramfs, SDDM assets only where SDDM exists
+
+---
+ bin/omarchy-plymouth-set | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/bin/omarchy-plymouth-set b/bin/omarchy-plymouth-set
+index 44c32b75..8fe14ba5 100755
+--- a/bin/omarchy-plymouth-set
++++ b/bin/omarchy-plymouth-set
+@@ -222,6 +222,7 @@ run_root_transaction() {
+       sddm_assets=("${sddm_default_assets[@]}")
+       ;;
+     esac
++    [[ -d /usr/share/sddm ]] || sddm_assets=()
+ 
+     validate_trusted_file() {
+       local source=$1 canonical uid file_mode size
+@@ -371,11 +372,17 @@ else
+ fi
+ 
+ if [[ $mode != "refresh-sddm" ]]; then
+-  sudo plymouth-set-default-theme omarchy
+-
+-  if omarchy-cmd-present limine-mkinitcpio; then
+-    sudo limine-mkinitcpio
++  if omarchy-cmd-present update-initramfs; then
++    sudo update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth /usr/share/plymouth/themes/omarchy/omarchy.plymouth 200
++    sudo update-alternatives --set default.plymouth /usr/share/plymouth/themes/omarchy/omarchy.plymouth
++    sudo update-initramfs -u
+   else
+-    sudo mkinitcpio -P
++    sudo plymouth-set-default-theme omarchy
++
++    if omarchy-cmd-present limine-mkinitcpio; then
++      sudo limine-mkinitcpio
++    else
++      sudo mkinitcpio -P
++    fi
+   fi
+ fi
+-- 
+2.43.0
+

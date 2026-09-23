@@ -5,7 +5,7 @@ Everything not listed here is upstream's own code and configuration, unchanged.
 | Area | Upstream (Arch) | Here (Ubuntu 24.04) | Why |
 |---|---|---|---|
 | Display manager | SDDM with Omarchy's Qt6 theme | GDM, `omarchy.desktop` wayland session (uwsm); packaged `Hyprland` entry as fallback | Omarchy's theme needs SDDM 0.21; noble ships 0.20 |
-| Boot splash | Plymouth theme installed through mkinitcpio hooks | Ubuntu's Plymouth | mkinitcpio does not exist on Ubuntu |
+| Boot splash | Plymouth theme through `plymouth-set-default-theme` and mkinitcpio | same theme in `/usr/share/plymouth/themes/omarchy` via `update-alternatives` and `update-initramfs` (step 59, fork patch 0007); Style > Unlock recolours it per theme | no mkinitcpio on Ubuntu |
 | Packages | pacman, AUR, `omarchy-pkg-*` | apt, official .debs from GitHub releases, mise for what its registry carries (herdr, cliamp, the agent CLIs), source builds for the rest; `omarchy-pkg-installed` maps Arch names to dpkg/snap/flatpak/command | no pacman; mise first is the user's rule |
 | Update | `omarchy-update` (pacman, snapper, keyring) | `omarchy-update-ubuntu`: git tag rebase, reviewed migrations | migrations and updates assume pacman |
 | Qt / Quickshell | distro packages | Qt 6.11 from aqtinstall in `~/.local/opt/Qt`, Quickshell built with a compat header for `wl_fixes` | noble has Qt 6.4 and libwayland 1.22 |
@@ -27,5 +27,5 @@ Everything not listed here is upstream's own code and configuration, unchanged.
 | zram | `zram-generator.conf.d/90-omarchy.conf` under `/usr/lib` | same content in `/etc/systemd/zram-generator.conf` | noble's zram-generator 1.1.2 reads no `conf.d`; the disk swapfile stays at priority -1 for hibernation |
 | cups-browsed | `cups-files.conf` with Arch's uid/gid 209, `SystemGroup cups-browsed sys root` | Ubuntu's `cups-files.conf` with `cups-browsed` added to `SystemGroup`; queue settings appended to Ubuntu's `cups-browsed.conf` | Arch ids and Ubuntu's `BrowseRemoteProtocols dnssd` |
 | Docker | `daemon.json` from the package | `dns` and `bip` merged into the existing `daemon.json`, docker restarted only at reboot | local log settings kept; a restart stops running containers |
-| Not ported | mkinitcpio, limine, plymouth (the menu's Style > Unlock is hidden with `"style.unlock": {"when":"false"}` in `~/.config/omarchy/extensions/omarchy-menu.jsonc`), sddm, faillock, nsswitch, ufw-docker | left to Ubuntu | Arch boot stack, no faillock in Ubuntu's PAM, `nsswitch` carries `sss` for the corporate login |
+| Not ported | mkinitcpio, limine, sddm, faillock, nsswitch, ufw-docker | left to Ubuntu | Arch boot stack, no faillock in Ubuntu's PAM, `nsswitch` carries `sss` for the corporate login |
 | Global user units | Arch enables none | `foot-server`, `fumon` and `hyprsunset` globally disabled | Ubuntu's presets enable them for every session; Omarchy starts hyprsunset from the nightlight toggle only |
