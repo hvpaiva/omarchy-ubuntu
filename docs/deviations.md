@@ -6,7 +6,7 @@ Everything not listed here is upstream's own code and configuration, unchanged.
 |---|---|---|---|
 | Display manager | SDDM with Omarchy's Qt6 theme | GDM, `omarchy.desktop` wayland session (uwsm); packaged `Hyprland` entry as fallback | Omarchy's theme needs SDDM 0.21; noble ships 0.20 |
 | Boot splash | Plymouth theme installed through mkinitcpio hooks | Ubuntu's Plymouth | mkinitcpio does not exist on Ubuntu |
-| Packages | pacman, AUR, `omarchy-pkg-*` | apt, official .debs from GitHub releases, source builds; `omarchy-pkg-installed` maps Arch names to dpkg/snap/flatpak/command | no pacman |
+| Packages | pacman, AUR, `omarchy-pkg-*` | apt, official .debs from GitHub releases, mise for what its registry carries (herdr, cliamp, the agent CLIs), source builds for the rest; `omarchy-pkg-installed` maps Arch names to dpkg/snap/flatpak/command | no pacman; mise first is the user's rule |
 | Update | `omarchy-update` (pacman, snapper, keyring) | `omarchy-update-ubuntu`: git tag rebase, reviewed migrations | migrations and updates assume pacman |
 | Qt / Quickshell | distro packages | Qt 6.11 from aqtinstall in `~/.local/opt/Qt`, Quickshell built with a compat header for `wl_fixes` | noble has Qt 6.4 and libwayland 1.22 |
 | ImageMagick | `magick` (IM7) | `/usr/local/bin/magick` shim to `convert` | noble ships IM6 |
