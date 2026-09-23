@@ -33,11 +33,11 @@ if ((${#present[@]})); then
 fi
 
 # ImageMagick 6 has no `magick` entry point; Omarchy scripts call `magick`.
-if ! have magick; then
-  install -Dm755 /dev/stdin /usr/local/bin/magick <<'EOF'
+if [[ ! -x /usr/bin/magick ]]; then
+  install -Dm755 /dev/stdin /usr/bin/magick <<'EOF'
 #!/bin/sh
 # Ubuntu 24.04 ships ImageMagick 6: `magick` is `convert` there.
 exec convert "$@"
 EOF
-  note "installed /usr/local/bin/magick shim"
+  note "installed /usr/bin/magick shim (omarchy-plymouth-set runs with PATH=/usr/bin:/bin)"
 fi
