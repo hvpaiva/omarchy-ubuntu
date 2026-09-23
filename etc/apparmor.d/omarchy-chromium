@@ -1,0 +1,15 @@
+# Omarchy port: Ubuntu 24.04 restricts unprivileged user namespaces to
+# programs with an AppArmor profile that grants them. Ubuntu's apparmor package
+# ships such profiles for Chrome, Brave, Edge, Opera and Vivaldi but not for a
+# Chromium .deb. This mirrors /etc/apparmor.d/chrome: it allows everything and
+# only lets Chromium use its namespace sandbox.
+
+abi <abi/4.0>,
+include <tunables/global>
+
+profile chromium /usr/lib/chromium/chromium flags=(unconfined) {
+  userns,
+
+  # Site-specific additions and overrides. See local/README for details.
+  include if exists <local/chromium>
+}

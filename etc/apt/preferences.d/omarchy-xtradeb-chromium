@@ -1,0 +1,10 @@
+# Omarchy port: take only Chromium from the xtradeb PPA. The PPA also carries
+# Firefox, yt-dlp, virt-manager, Shotwell and more; those stay on Ubuntu's
+# packages. The Chromium stanza comes first so it wins over the catch-all.
+Package: chromium chromium-*
+Pin: release o=LP-PPA-xtradeb-apps
+Pin-Priority: 500
+
+Package: *
+Pin: release o=LP-PPA-xtradeb-apps
+Pin-Priority: 1

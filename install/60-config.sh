@@ -71,8 +71,8 @@ ln -sfn "$OMARCHY_HOME/.local/state/omarchy/current/theme/btop.theme" "$cfg/btop
 # The uwsm session honours XDG autostart, so Ubuntu's GNOME helpers would start
 # too: IBus (im-launch), nm-applet (the shell has a network panel) and
 # update-notifier (the shell shows Omarchy's own update notice). Hide them.
-for a in im-launch nm-applet update-notifier; do
-  install -Dm644 "$REPO_DIR/config/autostart/$a.desktop" "$cfg/autostart/$a.desktop"
+for a in "$REPO_DIR"/config/autostart/*.desktop; do
+  install -Dm644 "$a" "$cfg/autostart/$(basename "$a")"
 done
 
 log "the rest of Omarchy's skel: wireplumber, xournalpp, fcitx environment, fontconfig aliases, gpg keyservers, nautilus extensions"
@@ -87,6 +87,18 @@ if [[ ! -f $OMARCHY_HOME/.gnupg/dirmngr.conf ]]; then
 fi
 mkdir -p "$OMARCHY_HOME/.local/share/nautilus-python/extensions"
 cp "$OMARCHY_PATH"/default/nautilus-python/extensions/*.py "$OMARCHY_HOME/.local/share/nautilus-python/extensions/"
+
+# Omarchy's mimeapps.list opens text files with nvim.desktop, which Arch's
+# neovim package installs. A Neovim from the upstream tarball ships the file
+# but installs nothing, so text files would have no handler.
+if have nvim && [[ ! -e /usr/share/applications/nvim.desktop && ! -e $OMARCHY_HOME/.local/share/applications/nvim.desktop ]]; then
+  nvim_desktop=$(dirname "$(readlink -f "$(command -v nvim)")")/../share/applications/nvim.desktop
+  if [[ -f $nvim_desktop ]]; then
+    ln -sfn "$(readlink -f "$nvim_desktop")" "$OMARCHY_HOME/.local/share/applications/nvim.desktop"
+    update-desktop-database "$OMARCHY_HOME/.local/share/applications" >/dev/null 2>&1 || true
+    note "linked    nvim.desktop from the Neovim install"
+  fi
+fi
 
 log "first theme (headless; the running shell re-applies it after login)"
 theme=${OMARCHY_THEME:-tokyo-night}
