@@ -29,13 +29,15 @@ run it: a git checkout in "dev link" mode, with the shell built from source.
   gpu-screen-recorder, voxtype (dictation), LocalSend.
 - Updates: `omarchy-update-ubuntu` (also behind the menu's Update entry) rebases
   the port's patches on the next upstream tag and reviews new migrations.
-- The menu's Install/Remove entries work against dpkg, snap and flatpak.
+- The menu's Install/Remove entries work against dpkg, snap and flatpak, and
+  install what apt lacks from the vendor's own apt repository or .deb, from
+  Omarchy's package repository, from mise, or from the upstream release.
 
 ## What stays Ubuntu
 
 GDM instead of SDDM (Omarchy's SDDM theme needs a newer SDDM), Ubuntu's Plymouth,
-apt instead of pacman (the Omarchy "Install" menu maps Arch names to apt when it
-can and tells you when it cannot), and no AUR. See [docs/deviations.md](docs/deviations.md).
+apt instead of pacman (the Omarchy "Install" menu maps Arch names to apt or to
+the vendor's own channel), and no AUR. See [docs/deviations.md](docs/deviations.md).
 
 ## Install
 
