@@ -69,6 +69,19 @@ for a in im-launch nm-applet update-notifier; do
   install -Dm644 "$REPO_DIR/config/autostart/$a.desktop" "$cfg/autostart/$a.desktop"
 done
 
+log "the rest of Omarchy's skel: wireplumber, xournalpp, fcitx environment, fontconfig aliases, gpg keyservers, nautilus extensions"
+[[ -d $cfg/wireplumber/wireplumber.conf.d ]] || cp -a "$OMARCHY_PATH/config/wireplumber" "$cfg/wireplumber"
+[[ -d $cfg/xournalpp ]] || cp -a "$OMARCHY_PATH/config/xournalpp" "$cfg/xournalpp"
+install -Dm644 "$OMARCHY_PATH/default/environment.d/10-omarchy-fcitx.conf" "$cfg/environment.d/10-omarchy-fcitx.conf"
+install -Dm644 "$OMARCHY_PATH/default/fontconfig/conf.avail/50-omarchy.conf" "$cfg/fontconfig/conf.d/50-omarchy.conf"
+fc-cache -f >/dev/null 2>&1 || true
+if [[ ! -f $OMARCHY_HOME/.gnupg/dirmngr.conf ]]; then
+  mkdir -p "$OMARCHY_HOME/.gnupg" && chmod 700 "$OMARCHY_HOME/.gnupg"
+  cp "$OMARCHY_PATH/default/gpg/dirmngr.conf" "$OMARCHY_HOME/.gnupg/dirmngr.conf"
+fi
+mkdir -p "$OMARCHY_HOME/.local/share/nautilus-python/extensions"
+cp "$OMARCHY_PATH"/default/nautilus-python/extensions/*.py "$OMARCHY_HOME/.local/share/nautilus-python/extensions/"
+
 log "first theme (headless; the running shell re-applies it after login)"
 theme=${OMARCHY_THEME:-tokyo-night}
 if [[ ! -f $OMARCHY_HOME/.local/state/omarchy/current/theme.name ]]; then

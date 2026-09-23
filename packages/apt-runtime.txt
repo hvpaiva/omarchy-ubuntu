@@ -66,6 +66,7 @@ fcitx5-frontend-qt6
 
 # Apps the default bindings reach for
 nautilus
+python3-nautilus
 mpv
 btop
 fastfetch
