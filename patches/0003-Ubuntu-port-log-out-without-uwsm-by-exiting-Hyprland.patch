@@ -1,7 +1,7 @@
 From 07ea79c22674b17a00536ecab12b6483fc6830d7 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 21:18:11 -0300
-Subject: [PATCH 3/5] Ubuntu port: log out without uwsm by exiting Hyprland
+Subject: [PATCH 3/6] Ubuntu port: log out without uwsm by exiting Hyprland
 
 omarchy-system-logout only knew uwsm stop, which does nothing when the
 display manager started Hyprland directly: windows closed and the
