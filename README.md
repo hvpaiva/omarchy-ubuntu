@@ -49,7 +49,10 @@ The bootstrap is idempotent and resumable (`bootstrap.sh --list`, `bootstrap.sh 
 It asks for your password for the root steps (through polkit when a session is
 up, otherwise sudo). Expect 20 to 40 minutes: it downloads Qt (about 1 GB) and
 compiles Quickshell and the companion apps. When it finishes, log out and pick
-`Omarchy (Hyprland uwsm)` in GDM once; autologin then targets it.
+`Omarchy (Hyprland uwsm)` in GDM once; autologin then targets it. Autologin
+cannot unlock Ubuntu's `login` keyring, which is encrypted with your password;
+run `bin/omarchy-keyring-passwordless` once from a terminal to get Omarchy's
+passwordless default keyring (see [docs/gotchas.md](docs/gotchas.md)).
 
 Personal files are never overwritten: existing `~/.config/hypr/*.lua`,
 terminal configs and `~/.bashrc` are backed up with a `.bak-omarchy` suffix the
@@ -65,7 +68,7 @@ first time and left alone afterwards. `monitors.lua` is yours to edit.
 | `patches/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (dpkg guards, apt helpers, update hand-off, logout without uwsm) |
 | `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; `monitors.lua.example` |
 | `etc/` | PAM stacks (lock, polkit with fingerprint), polkit rule, wayland session entry |
-| `bin/` | `omarchy-update-ubuntu`, `omarchy-build-qt-apps` |
+| `bin/` | `omarchy-update-ubuntu`, `omarchy-build-qt-apps`, `omarchy-keyring-passwordless` |
 | `docs/` | deviations from upstream and the gotchas found while porting |
 
 ## Updating

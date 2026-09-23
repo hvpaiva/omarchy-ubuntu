@@ -57,6 +57,12 @@ done
 
 log "fcitx5 (XCompose sequences), share picker, btop theme hook, IBus autostart hidden"
 [[ -d $cfg/fcitx5 ]] || cp -a "$OMARCHY_PATH/config/fcitx5" "$cfg/fcitx5"
+if ! grep -q wayland-diagnose-other "$cfg/fcitx5/conf/notifications.conf" 2>/dev/null; then
+  fcitx_was_active=$(systemctl --user is-active omarchy-fcitx5.service 2>/dev/null)
+  systemctl --user stop omarchy-fcitx5.service >/dev/null 2>&1 || true
+  printf '# Hidden Notifications\n[HiddenNotifications]\n0=wayland-diagnose-other\n' >"$cfg/fcitx5/conf/notifications.conf"
+  [[ $fcitx_was_active == active ]] && systemctl --user start omarchy-fcitx5.service >/dev/null 2>&1 || true
+fi
 mkdir -p "$cfg/hyprland-preview-share-picker"
 [[ -f $cfg/hyprland-preview-share-picker/config.yaml ]] || cp "$OMARCHY_PATH/config/hyprland-preview-share-picker/config.yaml" "$cfg/hyprland-preview-share-picker/"
 mkdir -p "$cfg/btop/themes"

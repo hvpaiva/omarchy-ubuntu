@@ -18,7 +18,15 @@ done
 # would come back with the uwsm session: waybar next to the shell's bar, hypridle
 # fighting the shell's idle, hyprpolkitagent registering before the shell's agent,
 # mako and swaync both claiming org.freedesktop.Notifications. Mask them.
-systemctl --user mask mako.service swaync.service waybar.service hypridle.service hyprpolkitagent.service >/dev/null 2>&1 || true
+old_units=(mako.service swaync.service waybar.service hypridle.service hyprpolkitagent.service hyprpaper.service xdg-desktop-portal-gnome.service)
+for u in "${old_units[@]}"; do
+  if [[ -e /usr/lib/systemd/user/$u ]]; then
+    systemctl --user mask "$u" >/dev/null 2>&1 || true
+    warn "$u is still installed (step 10 left its package, see packages/apt-replaced.txt); masked"
+  elif [[ -L $units_dst/$u && $(readlink "$units_dst/$u") == /dev/null ]]; then
+    systemctl --user unmask "$u" >/dev/null 2>&1 || true
+  fi
+done
 mkdir -p "$OMARCHY_HOME/.config/autostart.disabled-omarchy"
 for d in walker.desktop ulauncher.desktop; do
   [[ -f $OMARCHY_HOME/.config/autostart/$d ]] && mv "$OMARCHY_HOME/.config/autostart/$d" "$OMARCHY_HOME/.config/autostart.disabled-omarchy/$d"

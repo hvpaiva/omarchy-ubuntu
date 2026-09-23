@@ -1,0 +1,10 @@
+waybar
+mako-notifier
+sway-notification-center
+hyprlock
+hypridle
+hyprpaper
+hyprpolkitagent
+swaybg
+wlogout
+xdg-desktop-portal-gnome
