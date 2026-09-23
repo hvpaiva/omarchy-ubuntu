@@ -56,17 +56,10 @@ install -m 0755 "$SRC_DIR/tensaku/target/release/tensaku-edit" "$LOCAL_BIN/tensa
 
 cargo_app ttfx https://github.com/omacom-io/ttfx "$TTFX_VERSION"
 
-if ! want "$LOCAL_BIN/herdr" "$HERDR_VERSION"; then
-  ZIG="$(mise where "zig@$ZIG_VERSION")/bin/zig" cargo_app herdr https://github.com/herdrdev/herdr "$HERDR_VERSION"
-fi
+log "herdr $HERDR_VERSION and cliamp $CLIAMP_VERSION (mise, GitHub releases)"
+mise use --global "herdr@${HERDR_VERSION#v}" "cliamp@${CLIAMP_VERSION#v}"
 
 cargo_app hyprland-preview-share-picker https://github.com/WhySoBad/hyprland-preview-share-picker "$SHARE_PICKER_VERSION"
-
-if [[ ! -x $LOCAL_BIN/cliamp ]] || ! git -C "$SRC_DIR/cliamp" describe --tags 2>/dev/null | grep -q "$CLIAMP_VERSION"; then
-  log "cliamp $CLIAMP_VERSION (Go)"
-  git_checkout "$SRC_DIR/cliamp" https://github.com/bjarneo/cliamp "$CLIAMP_VERSION"
-  (cd "$SRC_DIR/cliamp" && go build -trimpath -ldflags="-s -w" -o "$LOCAL_BIN/cliamp" .)
-fi
 
 if [[ ! -x $LOCAL_BIN/aether ]] || ! git -C "$SRC_DIR/aether" describe --tags 2>/dev/null | grep -q "$AETHER_VERSION"; then
   log "aether $AETHER_VERSION (Wails, webkit2gtk 4.1)"

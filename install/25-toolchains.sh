@@ -1,5 +1,5 @@
 #!/bin/bash
-# Language toolchains for the source builds: Rust (rustup), Go and zig (mise),
+# Language toolchains for the source builds: Rust (rustup), Go (mise),
 # the Wails CLI for aether. Nothing here is system-wide.
 source "${REPO_DIR:?}/lib/common.sh"
 need_user
@@ -21,14 +21,9 @@ if ! have go; then
   mise use --global go@latest
 fi
 
-if ! mise where "zig@$ZIG_VERSION" >/dev/null 2>&1; then
-  log "zig $ZIG_VERSION via mise (herdr's vendored libghostty-vt)"
-  mise install "zig@$ZIG_VERSION"
-fi
-
 if ! have wails && [[ ! -x $(go env GOPATH)/bin/wails ]]; then
   log "Wails CLI (aether)"
   go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
 fi
 
-note "cargo $(cargo --version | cut -d' ' -f2), $(go version | cut -d' ' -f3), zig $ZIG_VERSION"
+note "cargo $(cargo --version | cut -d' ' -f2), $(go version | cut -d' ' -f3)"
