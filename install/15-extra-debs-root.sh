@@ -17,8 +17,10 @@ install_deb() { # install_deb <name> <github repo> <tag> <asset>
 # gum: the TUI toolkit every omarchy-* prompt uses.
 install_deb gum charmbracelet/gum "v$GUM_VERSION" "gum_${GUM_VERSION}_amd64.deb"
 
-# LocalSend: Super+Ctrl+S share menu (`localsend --headless send`).
+# LocalSend: Super+Ctrl+S share menu (`localsend --headless send`). The .deb only
+# installs /opt/localsend_app/localsend_app; the Arch package puts `localsend` on PATH.
 install_deb localsend localsend/localsend "v$LOCALSEND_VERSION" "LocalSend-${LOCALSEND_VERSION}-linux-x86-64.deb"
+ln -sfn /opt/localsend_app/localsend_app /usr/local/bin/localsend
 
 # Voxtype: dictation (Super+Ctrl+X / F9). The .deb ships the CPU, Vulkan and OSD variants.
 install_deb voxtype peteonrails/voxtype "v$VOXTYPE_VERSION" "voxtype_${VOXTYPE_VERSION}-1_amd64.deb"
