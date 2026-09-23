@@ -67,4 +67,4 @@ libgtk-3-dev
 
 # hyprpicker
 libhyprutils-dev
-libhyprwayland-scanner-dev
+hyprwayland-scanner
