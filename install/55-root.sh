@@ -14,7 +14,7 @@ if [[ ! -L /usr/share/omarchy || $(readlink /usr/share/omarchy) != "$OMARCHY_PAT
   ln -sfn "$OMARCHY_PATH" /usr/share/omarchy
 fi
 install_file 644 /etc/omarchy.conf <<EOF
-export OMARCHY_PATH='$OMARCHY_PATH'
+export OMARCHY_PATH="$OMARCHY_PATH"
 EOF
 
 log "login shells (upstream: /etc/profile.d/omarchy.sh); real users only, so root's PATH stays clean"
