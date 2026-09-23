@@ -1,0 +1,35 @@
+From 08c03ab59287d748443a7f380d9eb81f77aa445d Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Wed, 23 Sep 2026 09:42:20 -0300
+Subject: [PATCH] Ubuntu port: vipsthumbnail 8.15 takes -o, not --path
+
+---
+ bin/omarchy-menu-images | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/bin/omarchy-menu-images b/bin/omarchy-menu-images
+index 8c316462..55c5fb84 100755
+--- a/bin/omarchy-menu-images
++++ b/bin/omarchy-menu-images
+@@ -12,6 +12,9 @@ prepare_only=false
+ preload=false
+ cache_only=false
+ image_dirs=()
++vips_output_flag=--path
++vipsthumbnail --help 2>&1 | grep -q -- '--path' || vips_output_flag=-o
++export vips_output_flag
+ 
+ usage() {
+   echo "Usage: omarchy-menu-images [--selected <image>] [--print-name] [--show-labels] [--filterable] [--lazy-thumbnails] [--preload] [--cache-only] <image-dir>..."
+@@ -164,7 +167,7 @@ generate_thumbnail() {
+   # Callers fan out one generator per image, so keep each vips single-threaded.
+   # Close the lock fd for vips: an orphaned or hung vips must not keep holding
+   # the lock after this shell is killed.
+-  if VIPS_CONCURRENCY=1 vipsthumbnail "$image" --size 1536x864 --smartcrop=centre --path "$tmp[Q=82,strip]" {lock_fd}>&-; then
++  if VIPS_CONCURRENCY=1 vipsthumbnail "$image" --size 1536x864 --smartcrop=centre "$vips_output_flag" "$tmp[Q=82,strip]" {lock_fd}>&-; then
+     mv -f "$tmp" "$thumbnail"
+   else
+     rm -f "$tmp" "$thumbnail"
+-- 
+2.43.0
+

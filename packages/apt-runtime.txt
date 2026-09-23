@@ -27,6 +27,7 @@ wl-clipboard
 ddcutil
 wtype
 imagemagick
+libvips-tools
 tesseract-ocr
 tesseract-ocr-eng
 zbar-tools
