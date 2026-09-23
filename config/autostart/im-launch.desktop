@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=im-launch
+Hidden=true
+# Ubuntu's im-config starts IBus from XDG autostart and the uwsm session honours
+# autostart entries. Omarchy uses fcitx5 for XCompose sequences, not IBus.

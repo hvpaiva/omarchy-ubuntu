@@ -1,0 +1,35 @@
+From cfba76a676b03b87a9460000cde5d4ac4064463d Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Tue, 22 Sep 2026 20:30:18 -0300
+Subject: [PATCH 2/4] Ubuntu port: hand omarchy-update to omarchy-update-ubuntu
+ when pacman is absent
+
+Every step of omarchy-update after the lock is pacman (prune, keyring,
+system packages, AUR, orphans, snapshot). The port keeps its updater
+outside the checkout (a rebase in the middle of a running script would
+corrupt it), so omarchy-update only execs it when it is on PATH and
+there is no pacman.
+---
+ bin/omarchy-update | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/bin/omarchy-update b/bin/omarchy-update
+index e71e8086..565f99ea 100755
+--- a/bin/omarchy-update
++++ b/bin/omarchy-update
+@@ -16,6 +16,12 @@ if ! omarchy-update-lock held; then
+   exec omarchy-update-lock run "$0" "$@"
+ fi
+ 
++# Ubuntu port: everything below is pacman. The port's updater (git tag on the
++# ubuntu branch, reviewed migrations, out-of-checkout pieces) takes over.
++if ! command -v pacman &>/dev/null && command -v omarchy-update-ubuntu &>/dev/null; then
++  exec omarchy-update-ubuntu "$@"
++fi
++
+ trap 'echo ""; echo -e "\033[0;31mSomething went wrong during the update!\n\nPlease review the output above carefully, correct the error, and retry the update.\n\nIf you need assistance, get help from the community at https://omarchy.org/discord\033[0m"' ERR
+ trap 'omarchy-update-stay-awake stop' EXIT
+ 
+-- 
+2.43.0
+

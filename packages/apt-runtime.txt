@@ -1,0 +1,72 @@
+# Runtime packages the Omarchy 4 shell and its scripts call on Ubuntu 24.04.
+# One per line; comments allowed. Installed by install/10-apt.sh.
+
+# Compositor stack (PPA cppiber/hyprland)
+hyprland
+xdg-desktop-portal-hyprland
+hyprsunset
+uwsm
+wayland-protocols
+
+# Portals, session, auth
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+polkitd
+fprintd
+libpam-fprintd
+zenity
+
+# Terminals Omarchy supports (ghostty comes from a .deb, see install/15-extra-debs.sh)
+alacritty
+foot
+
+# Screenshot, recording helpers, clipboard, OSD glue
+grim
+slurp
+wl-clipboard
+wtype
+imagemagick
+tesseract-ocr
+tesseract-ocr-eng
+zbar-tools
+qrencode
+inotify-tools
+socat
+playerctl
+brightnessctl
+pulseaudio-utils
+udiskie
+bluez-tools
+network-manager
+
+# Scripting
+lua5.4
+jq
+fzf
+bat
+ripgrep
+fd-find
+git
+curl
+unzip
+
+# GTK/GNOME bits the theme switcher drives
+gnome-themes-extra
+yaru-theme-icon
+dconf-cli
+libglib2.0-bin
+
+# Input method for XCompose sequences (upstream ships fcitx5)
+fcitx5
+fcitx5-frontend-gtk3
+fcitx5-frontend-gtk4
+fcitx5-frontend-qt5
+fcitx5-frontend-qt6
+
+# Apps the default bindings reach for
+nautilus
+mpv
+btop
+fastfetch
+cava
+tmux

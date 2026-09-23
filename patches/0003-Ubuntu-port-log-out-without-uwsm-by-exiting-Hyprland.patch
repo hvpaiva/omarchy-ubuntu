@@ -1,0 +1,35 @@
+From 07ea79c22674b17a00536ecab12b6483fc6830d7 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Tue, 22 Sep 2026 21:18:11 -0300
+Subject: [PATCH 3/4] Ubuntu port: log out without uwsm by exiting Hyprland
+
+omarchy-system-logout only knew uwsm stop, which does nothing when the
+display manager started Hyprland directly: windows closed and the
+session stayed. Without an active uwsm session, exit the compositor,
+which ends the GDM session.
+---
+ bin/omarchy-system-logout | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/bin/omarchy-system-logout b/bin/omarchy-system-logout
+index cb0fd660..b4eb0bcb 100755
+--- a/bin/omarchy-system-logout
++++ b/bin/omarchy-system-logout
+@@ -4,7 +4,13 @@
+ # omarchy:examples=omarchy logout | omarchy system logout
+ # omarchy:aliases=omarchy logout
+ 
+-nohup bash -c "sleep 2 && uwsm stop" >/dev/null 2>&1 &
++if uwsm check is-active >/dev/null 2>&1; then
++  nohup bash -c "sleep 2 && uwsm stop" >/dev/null 2>&1 &
++else
++  # Ubuntu port: a session started straight by the display manager (no uwsm)
++  # ends when the compositor exits. Lua config first, classic syntax as fallback.
++  nohup bash -c "sleep 2 && { hyprctl dispatch 'hl.dsp.exit()' || hyprctl dispatch exit; }" >/dev/null 2>&1 &
++fi
+ 
+ omarchy-osd -i logout -m "Logging out" -d 5000
+ 
+-- 
+2.43.0
+

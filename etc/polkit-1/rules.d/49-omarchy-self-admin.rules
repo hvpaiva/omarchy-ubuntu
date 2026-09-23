@@ -1,0 +1,10 @@
+// omarchy-ubuntu. The omarchy-shell polkit agent authenticates with the first
+// admin identity polkit offers. Ubuntu offers the whole sudo group, so on a
+// machine with several admins that was another account and the logged-in
+// user's password came back "wrong". For members of sudo, offer only their
+// own account, which is what Arch's wheel setup amounts to.
+polkit.addAdminRule(function(action, subject) {
+    if (subject.isInGroup("sudo")) {
+        return ["unix-user:" + subject.user];
+    }
+});

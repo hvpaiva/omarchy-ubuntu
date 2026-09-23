@@ -1,0 +1,49 @@
+#!/bin/bash
+# Build and install Omarchy's Qt Quick apps (omacalc, omawrite, omacut) against
+# the aqt Qt, into ~/.local/bin, with .desktop entries and icons under ~/.local/share.
+#
+#   omarchy-build-qt-apps [omacalc|omawrite|omacut ...]   (default: all three)
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
+need_user
+
+APPS_DIR=$OMARCHY_HOME/.local/share/applications
+ICONS_DIR=$OMARCHY_HOME/.local/share/icons/hicolor/scalable/apps
+[[ -x $QT_DIR/bin/qmake6 ]] || die "qmake6 not found in $QT_DIR/bin"
+mkdir -p "$LOCAL_BIN" "$APPS_DIR" "$ICONS_DIR" "$SRC_DIR"
+
+version_of() { case $1 in omacalc) echo "$OMACALC_VERSION" ;; omawrite) echo "$OMAWRITE_VERSION" ;; omacut) echo "$OMACUT_VERSION" ;; esac; }
+
+build_one() {
+  local app=$1 dir=$SRC_DIR/$1 tag
+  tag=$(version_of "$app")
+  if [[ -x $LOCAL_BIN/$app ]] && git -C "$dir" describe --tags 2>/dev/null | grep -q "$tag"; then
+    note "unchanged $app $tag"
+    return
+  fi
+  log "$app $tag"
+  git_checkout "$dir" "https://github.com/omacom-io/$app" "$tag"
+  mkdir -p "$dir/build"
+  (cd "$dir/build" && "$QT_DIR/bin/qmake6" "../$app.pro" >/dev/null && make -j"$JOBS" 2>&1 | grep -iE "error" | head -5 || true)
+  [[ -x $dir/build/$app ]] || die "$app: no binary produced"
+  # qmake adds an RPATH to the Qt lib dir for non-system Qt installs; keep it honest.
+  readelf -d "$dir/build/$app" | grep -q "$QT_DIR/lib" || warn "$app has no RPATH to $QT_DIR/lib"
+  install -m 0755 "$dir/build/$app" "$LOCAL_BIN/$app"
+
+  # omawrite and omacut ship their desktop entry and icon under pkgbuild/; omacalc
+  # does not ship one, so the repo carries it.
+  if [[ -f $dir/pkgbuild/$app.desktop ]]; then
+    sed 's|^Exec=/usr/bin/|Exec=|' "$dir/pkgbuild/$app.desktop" >"$APPS_DIR/$app.desktop"
+    install -m 0644 "$dir/pkgbuild/$app.svg" "$ICONS_DIR/$app.svg"
+  else
+    install -m 0644 "$REPO_DIR/applications/$app.desktop" "$APPS_DIR/$app.desktop"
+    install -m 0644 "$REPO_DIR/applications/$app.svg" "$ICONS_DIR/$app.svg"
+  fi
+  note "installed $LOCAL_BIN/$app"
+}
+
+apps=("$@")
+(( ${#apps[@]} > 0 )) || apps=(omacalc omawrite omacut)
+for app in "${apps[@]}"; do
+  build_one "$app"
+done
+update-desktop-database "$APPS_DIR" 2>/dev/null || true

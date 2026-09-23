@@ -1,0 +1,4 @@
+#%PAM-1.0
+# omarchy-shell lock screen, fingerprint (Ubuntu, omarchy-ubuntu).
+auth    required        pam_fprintd.so
+@include common-account

@@ -1,0 +1,70 @@
+# Build dependencies for everything compiled from source (Quickshell, tensaku,
+# ttfx, the Qt Quick apps, cliamp, herdr, aether, the share picker,
+# gpu-screen-recorder, gtk4-layer-shell, xdg-terminal-exec, hyprpicker).
+
+build-essential
+cmake
+ninja-build
+meson
+pkg-config
+pipx
+
+# Quickshell
+libcli11-dev
+libpam0g-dev
+libpolkit-agent-1-dev
+libjemalloc-dev
+spirv-tools
+libpipewire-0.3-dev
+libdrm-dev
+libgbm-dev
+libvulkan-dev
+libwayland-dev
+libwayland-bin
+libxcb1-dev
+libx11-xcb-dev
+libglib2.0-dev
+
+# tensaku, share picker, hyprpicker (GTK4, layer shell, cairo)
+libgtk-4-dev
+libadwaita-1-dev
+libepoxy-dev
+libcairo2-dev
+libpango1.0-dev
+libxkbcommon-dev
+
+# gpu-screen-recorder
+libdbus-1-dev
+libgl-dev
+libavcodec-dev
+libavfilter-dev
+libavformat-dev
+libavutil-dev
+libswresample-dev
+libcap-dev
+libva-dev
+libpulse-dev
+libx11-dev
+libxcomposite-dev
+libxdamage-dev
+libxfixes-dev
+libxrandr-dev
+
+# cliamp (Go audio bindings)
+libasound2-dev
+libogg-dev
+libvorbis-dev
+libflac-dev
+libopus-dev
+libopusfile-dev
+libmpg123-dev
+libmp3lame-dev
+libsndfile1-dev
+
+# aether (Wails, WebKitGTK 4.1)
+libwebkit2gtk-4.1-dev
+libgtk-3-dev
+
+# hyprpicker
+libhyprutils-dev
+libhyprwayland-scanner-dev
