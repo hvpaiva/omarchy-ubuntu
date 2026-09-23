@@ -1,0 +1,14 @@
+#!/bin/bash
+# Region command for hyprland-preview-share-picker. slurp prints global logical
+# coordinates, while Hyprland's screencopy takes the region relative to the
+# output, so anything selected on a monitor placed away from the origin ends up
+# shifted. Rebase the selection on its output before handing it to the picker.
+
+selection=$(slurp -f '%o@%x,%y,%w,%h') || exit 1
+output=${selection%%@*}
+IFS=, read -r x y w h <<<"${selection#*@}"
+
+read -r ox oy < <(hyprctl monitors -j | jq -r --arg o "$output" '.[] | select(.name == $o) | "\(.x) \(.y)"')
+[[ -n $ox && -n $oy ]] || { printf '%s\n' "$selection"; exit 0; }
+
+printf '%s@%d,%d,%d,%d\n' "$output" "$((x - ox))" "$((y - oy))" "$w" "$h"

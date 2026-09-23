@@ -1,0 +1,186 @@
+#!/bin/bash
+
+# omarchy:summary=Microphone noise suppression (DeepFilterNet) hosted as its own PipeWire client
+# omarchy:args=<on|off|status|test|use> [source-node-name] [seconds]
+
+set -uo pipefail
+
+config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+host_config_name=omarchy-audio-input-denoise.conf
+host_config="$config_home/pipewire/$host_config_name"
+host_source="${OMARCHY_PATH:-/usr/share/omarchy}/default/audio/filter-chain-host.conf"
+fragment="$config_home/pipewire/$host_config_name.d/90-denoise.conf"
+plugin="$HOME/.local/lib/ladspa/libdeep_filter_ladspa.so"
+unit=omarchy-audio-input-denoise.service
+source_name=omarchy_denoise_source
+capture_name=omarchy_denoise_capture
+
+usage() {
+  echo "Usage: omarchy-audio-input-denoise <on|off|status|test|use> [source-node-name] [seconds]" >&2
+  exit 1
+}
+
+hardware_sources() {
+  pactl list sources short 2>/dev/null | awk '$2 !~ /\.monitor$/ && $2 != "'"$source_name"'" {print $2}'
+}
+
+current_target() {
+  [[ -f $fragment ]] && sed -n 's/.*target\.object *= *"\([^"]*\)".*/\1/p' "$fragment"
+}
+
+default_source() {
+  pactl get-default-source 2>/dev/null
+}
+
+source_present() {
+  pactl list sources short 2>/dev/null | awk '{print $2}' | grep -qx "$source_name"
+}
+
+service_pid() {
+  systemctl --user show -p MainPID --value "$unit" 2>/dev/null
+}
+
+write_config() {
+  local target=$1
+  [[ -r $host_source ]] || { echo "missing $host_source" >&2; exit 1; }
+  [[ -f $plugin ]] || { echo "missing $plugin (run install/46-audio-denoise.sh)" >&2; exit 1; }
+  install -Dm644 "$host_source" "$host_config"
+  mkdir -p "$(dirname "$fragment")"
+  cat >"$fragment" <<EOF
+context.modules = [
+  { name = libpipewire-module-filter-chain
+    args = {
+      node.description = "Microphone (DeepFilterNet)"
+      media.name       = "Microphone (DeepFilterNet)"
+      filter.graph = {
+        nodes = [
+          { type   = ladspa
+            name   = deepfilter
+            plugin = $plugin
+            label  = deep_filter_mono
+            control = { "Attenuation Limit (dB)" 100 }
+          }
+        ]
+      }
+      audio.rate     = 48000
+      audio.position = [ MONO ]
+      capture.props = {
+        node.name         = "$capture_name"
+        node.passive      = true
+        target.object     = "$target"
+        node.dont-fallback = true
+      }
+      playback.props = {
+        node.name   = "$source_name"
+        media.class = Audio/Source
+      }
+    }
+  }
+]
+EOF
+}
+
+wait_for_source() {
+  for _ in $(seq 1 50); do
+    source_present && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
+cmd_on() {
+  local target=${1:-$(current_target)}
+  if [[ -z $target || $target == "$source_name" ]]; then
+    target=$(default_source)
+    [[ $target == "$source_name" ]] && target=$(hardware_sources | head -1)
+  fi
+  [[ -n $target ]] || { echo "no microphone to filter" >&2; exit 1; }
+  hardware_sources | grep -qx "$target" || echo "warning: $target is not present right now" >&2
+  write_config "$target"
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$unit" >/dev/null 2>&1 || systemctl --user restart "$unit"
+  wait_for_source || { echo "$source_name did not appear; journalctl --user -u $unit" >&2; exit 1; }
+  pactl set-default-source "$source_name"
+  move_mute "$target" "$source_name"
+  echo "Denoise on: $target -> $source_name (default source)"
+}
+
+muted() {
+  LC_ALL=C pactl get-source-mute "$1" 2>/dev/null | grep -q yes
+}
+
+move_mute() {
+  local from=$1 to=$2
+  if muted "$from"; then
+    pactl set-source-mute "$to" 1
+    pactl set-source-mute "$from" 0
+  fi
+}
+
+cmd_off() {
+  local target
+  target=$(current_target)
+  if [[ -n $target ]] && hardware_sources | grep -qx "$target"; then
+    source_present && move_mute "$source_name" "$target"
+    pactl set-default-source "$target"
+  fi
+  systemctl --user disable --now "$unit" >/dev/null 2>&1 || true
+  echo "Denoise off; default source: $(default_source)"
+}
+
+cmd_status() {
+  echo "Service:        $(systemctl --user is-active "$unit" 2>/dev/null) ($(systemctl --user is-enabled "$unit" 2>/dev/null))"
+  echo "Filtered mic:   $(current_target)"
+  if source_present; then echo "Denoise source: present"; else echo "Denoise source: absent"; fi
+  echo "Default source: $(default_source)"
+  local pid
+  pid=$(service_pid)
+  if [[ -n $pid && $pid != 0 ]]; then
+    echo "CPU so far:     $(ps -o cputime= -p "$pid" | tr -d ' ') ($(ps -o rss= -p "$pid" | awk '{printf "%d MB", $1/1024}') resident)"
+  fi
+}
+
+cpu_ticks() {
+  awk '{print $14 + $15}' "/proc/$1/stat" 2>/dev/null
+}
+
+cmd_test() {
+  local seconds=${1:-15} target dir raw filtered pid t0 t1 hz
+  target=$(current_target)
+  source_present || { echo "denoise source absent; omarchy-audio-input-denoise on" >&2; exit 1; }
+  if wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null | grep -q MUTED; then
+    echo "default source is muted; unmute first (mic-mute key or wpctl set-mute @DEFAULT_AUDIO_SOURCE@ 0)" >&2
+    exit 1
+  fi
+  dir=${XDG_MUSIC_DIR:-$HOME/Music}
+  mkdir -p "$dir"
+  raw="$dir/denoise-test-raw.wav"
+  filtered="$dir/denoise-test-deepfilter.wav"
+  pid=$(service_pid)
+  hz=$(getconf CLK_TCK)
+  echo "Recording $seconds s from $target and from $source_name; speak normally, type, let the room be noisy."
+  t0=$(cpu_ticks "$pid")
+  pw-record --target "$target" --rate 48000 --channels 1 "$raw" &
+  pw-record --target "$source_name" --rate 48000 --channels 1 "$filtered" &
+  sleep "$seconds"
+  kill %1 %2 2>/dev/null
+  wait 2>/dev/null
+  t1=$(cpu_ticks "$pid")
+  echo "Filter CPU while recording: $(awk -v a="$t0" -v b="$t1" -v s="$seconds" -v hz="$hz" 'BEGIN {printf "%.1f%% of one core", (b - a) / hz / s * 100}')"
+  echo "Compare: mpv $raw ; mpv $filtered"
+}
+
+cmd_use() {
+  local target=${1:-}
+  [[ -n $target ]] || { hardware_sources; exit 0; }
+  cmd_on "$target"
+}
+
+case ${1:-status} in
+  on) cmd_on "${2:-}" ;;
+  off) cmd_off ;;
+  status) cmd_status ;;
+  test) cmd_test "${2:-15}" ;;
+  use) cmd_use "${2:-}" ;;
+  *) usage ;;
+esac

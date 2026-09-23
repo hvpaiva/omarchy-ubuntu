@@ -6,6 +6,8 @@ need_user
 mkdir -p "$LOCAL_BIN"
 ln -sfn "$REPO_DIR/bin/omarchy-update-ubuntu" "$LOCAL_BIN/omarchy-update-ubuntu"
 ln -sfn "$REPO_DIR/bin/omarchy-build-qt-apps" "$LOCAL_BIN/omarchy-build-qt-apps"
+ln -sfn "$REPO_DIR/bin/omarchy-share-picker-region" "$LOCAL_BIN/omarchy-share-picker-region"
+ln -sfn "$REPO_DIR/bin/omarchy-audio-input-denoise" "$LOCAL_BIN/omarchy-audio-input-denoise"
 note "omarchy-update-ubuntu and omarchy-build-qt-apps on PATH (~/.local/bin)"
 
 cat <<EOF

@@ -1,0 +1,15 @@
+[Unit]
+Description=Omarchy microphone noise suppression (DeepFilterNet filter-chain)
+After=pipewire.service wireplumber.service
+Requires=pipewire.service
+Wants=wireplumber.service
+PartOf=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pipewire -c omarchy-audio-input-denoise.conf
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
