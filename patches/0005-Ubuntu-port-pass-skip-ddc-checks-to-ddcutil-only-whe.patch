@@ -1,0 +1,60 @@
+From 5813949d718319cad577e750ab72d8714097d87e Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Tue, 22 Sep 2026 22:52:07 -0300
+Subject: [PATCH 5/5] Ubuntu port: pass --skip-ddc-checks to ddcutil only when
+ it exists
+
+Ubuntu 24.04 ships ddcutil 1.4, which rejects the option that ddcutil 2.0
+added, so external-monitor brightness silently failed.
+---
+ bin/omarchy-brightness-display-ddc | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/bin/omarchy-brightness-display-ddc b/bin/omarchy-brightness-display-ddc
+index aab91278..7e04164a 100755
+--- a/bin/omarchy-brightness-display-ddc
++++ b/bin/omarchy-brightness-display-ddc
+@@ -9,6 +9,13 @@ step="${2:-}"
+ 
+ [[ -n $monitor ]] || exit 1
+ 
++# --skip-ddc-checks arrived in ddcutil 2.0; Ubuntu 24.04 ships 1.4, which
++# rejects unknown options outright. Pass it only where it exists.
++ddc_opts=()
++if ddcutil --help 2>&1 | grep -q -- '--skip-ddc-checks'; then
++  ddc_opts=(--skip-ddc-checks)
++fi
++
+ cache_dir="${XDG_RUNTIME_DIR:-/tmp}/omarchy-brightness-display-ddc"
+ cache_name="${monitor//[^[:alnum:]_.-]/_}"
+ cache_file="$cache_dir/$cache_name.bus"
+@@ -21,7 +28,7 @@ cache_unavailable() {
+ }
+ 
+ detect_bus() {
+-  ddcutil --skip-ddc-checks detect --brief 2>/dev/null | awk -v monitor="$monitor" '
++  ddcutil "${ddc_opts[@]}" detect --brief 2>/dev/null | awk -v monitor="$monitor" '
+     /I2C bus:/ {
+       bus = $NF
+       sub(/^.*\/i2c-/, "", bus)
+@@ -73,7 +80,7 @@ find_bus() {
+ read_vcp() {
+   local bus="$1"
+ 
+-  ddcutil --bus "$bus" --skip-ddc-checks getvcp 10 --brief 2>/dev/null | awk '
++  ddcutil --bus "$bus" "${ddc_opts[@]}" getvcp 10 --brief 2>/dev/null | awk '
+     $1 == "VCP" && toupper($2) == "10" && $3 == "C" && $4 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ && $5 > 0 {
+       print $4, $5
+       found = 1
+@@ -160,7 +167,7 @@ fi
+ (( target > 100 )) && target=100
+ (( raw_target = (target * maximum + 50) / 100 ))
+ 
+-if ! ddcutil --bus "$bus" --skip-ddc-checks --noverify setvcp 10 "$raw_target" >/dev/null 2>&1; then
++if ! ddcutil --bus "$bus" "${ddc_opts[@]}" --noverify setvcp 10 "$raw_target" >/dev/null 2>&1; then
+   rm -f "$cache_file"
+   exit 1
+ fi
+-- 
+2.43.0
+
