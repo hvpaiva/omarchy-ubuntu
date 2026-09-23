@@ -37,6 +37,7 @@ playerctl
 brightnessctl
 pulseaudio-utils
 udiskie
+exfatprogs
 bluez-tools
 network-manager
 
@@ -68,6 +69,8 @@ fcitx5-frontend-qt6
 nautilus
 python3-nautilus
 mpv
+mpv-mpris
+imv
 btop
 fastfetch
 cava

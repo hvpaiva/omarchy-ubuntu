@@ -1,0 +1,16 @@
+# Omarchy port: read ~/.config/chromium-flags.conf the way Arch's chromium
+# launcher does (one flag per line, # starts a comment). Debian's
+# /usr/bin/chromium sources every file in /etc/chromium.d with /bin/sh, so this
+# must stay POSIX. It sorts after "extensions", so a --load-extension here wins
+# over the empty one that file adds.
+_omarchy_flags_conf="${XDG_CONFIG_HOME:-$HOME/.config}/chromium-flags.conf"
+if [ -r "$_omarchy_flags_conf" ]; then
+  while IFS= read -r _omarchy_flag || [ -n "$_omarchy_flag" ]; do
+    case $_omarchy_flag in
+      '' | '#'*) ;;
+      *) CHROMIUM_FLAGS="$CHROMIUM_FLAGS $_omarchy_flag" ;;
+    esac
+  done <"$_omarchy_flags_conf"
+  export CHROMIUM_FLAGS
+fi
+unset _omarchy_flags_conf _omarchy_flag

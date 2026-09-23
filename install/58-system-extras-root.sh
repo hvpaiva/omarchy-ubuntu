@@ -50,7 +50,6 @@ fi
 log "zram: swap in RAM as upstream; the disk swapfile stays, lower priority, for hibernation"
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-zram-generator
 install_file 644 /etc/systemd/zram-generator.conf <"$sysd/zram-generator.conf.d/90-omarchy.conf"
-install_file 644 /etc/sysctl.d/99-omarchy-sysctl.conf <"$etc/sysctl.d/99-omarchy-sysctl.conf"
 install_file 644 /etc/tmpfiles.d/omarchy-zswap.conf <"$etc/tmpfiles.d/omarchy-zswap.conf"
 systemctl daemon-reload
 if systemctl start systemd-zram-setup@zram0.service >/dev/null 2>&1; then

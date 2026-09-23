@@ -155,6 +155,12 @@ if ! cmp -s "$OMARCHY_PATH/bin/omarchy-theme-set-browser-policy" /usr/bin/omarch
 else
   echo "Browser policy helper and sudoers match the checkout."
 fi
+if ! REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --manifest | cmp -s - "$applied_dir/57-system-tweaks.sha256"; then
+  echo "Omarchy's system tweaks changed upstream; reapplying (root)."
+  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/57-system-tweaks-root.sh"
+else
+  echo "System tweaks match the checkout."
+fi
 
 units_changed=0
 for u in $OMARCHY_UNITS; do
