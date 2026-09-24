@@ -1,0 +1,27 @@
+From 3e18fee403a4386cedcc2a8b2fcedce014dca334 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Thu, 24 Sep 2026 09:49:03 -0300
+Subject: [PATCH 12/13] Ubuntu port: pass refreshToken to account/read in the
+ Codex usage probe
+
+Codex 0.156.0 never answers account/read without params, so the probe timed out after initialize and the agents panel showed no limits.
+---
+ bin/omarchy-agent-usage-codex | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/bin/omarchy-agent-usage-codex b/bin/omarchy-agent-usage-codex
+index 972c164d..a0a0eb90 100755
+--- a/bin/omarchy-agent-usage-codex
++++ b/bin/omarchy-agent-usage-codex
+@@ -544,7 +544,7 @@ def fetch_codex_rpc():
+     rpc_request(proc, 1, "initialize", {"clientInfo": {"name": "omarchy-agent-usage", "version": "1"}}, timeout=8)
+     proc.stdin.write(json.dumps({"method": "initialized", "params": {}}) + "\n")
+     proc.stdin.flush()
+-    account_msg = rpc_request(proc, 2, "account/read", timeout=4)
++    account_msg = rpc_request(proc, 2, "account/read", {"refreshToken": False}, timeout=4)
+     limits_msg = rpc_request(proc, 3, "account/rateLimits/read", timeout=4)
+ 
+     account = (account_msg.get("result") or {}).get("account") or {}
+-- 
+2.43.0
+

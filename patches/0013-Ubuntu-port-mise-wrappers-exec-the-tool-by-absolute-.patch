@@ -1,0 +1,28 @@
+From 9b6fa1bed06e3f09a242d1a40663058ce4dfa2bb Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Thu, 24 Sep 2026 09:49:03 -0300
+Subject: [PATCH 13/13] Ubuntu port: mise wrappers exec the tool by absolute
+ path
+
+mise x leaves PATH untouched when the tool's directory is already on it. With that directory after ~/.local/bin, as in the Hyprland session, the wrapper resolved to itself and recursed forever.
+---
+ bin/omarchy-mise-install | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/bin/omarchy-mise-install b/bin/omarchy-mise-install
+index 356c3324..569cd586 100755
+--- a/bin/omarchy-mise-install
++++ b/bin/omarchy-mise-install
+@@ -53,7 +53,8 @@ cat >"$HOME/.local/bin/$command" <<EOF
+ #!/bin/bash
+ export MISE_MINIMUM_RELEASE_AGE=0
+ mise use -g --quiet $package_arg || exit 1
+-exec mise x $package_arg -- $bin_arg "\$@"
++bin_path=\$(mise which --tool $package_arg $bin_arg 2>/dev/null) || bin_path=$bin_arg
++exec mise x $package_arg -- "\$bin_path" "\$@"
+ EOF
+ 
+ chmod +x "$HOME/.local/bin/$command"
+-- 
+2.43.0
+
