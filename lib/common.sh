@@ -6,6 +6,8 @@ set -euo pipefail
 REPO_DIR=${REPO_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}
 # shellcheck source=../versions.env
 source "$REPO_DIR/versions.env"
+# shellcheck source=units.sh
+source "$REPO_DIR/lib/units.sh"
 
 OMARCHY_USER=${OMARCHY_USER:-${SUDO_USER:-${PKEXEC_UID:+$(id -un "$PKEXEC_UID")}}}
 OMARCHY_USER=${OMARCHY_USER:-$(id -un)}

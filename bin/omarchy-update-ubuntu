@@ -18,7 +18,8 @@ PORT_DIR=${OMARCHY_UBUNTU_DIR:-$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOUR
 STATE_DIR=$HOME/.local/state/omarchy/migrations
 LOG=/tmp/omarchy-update.log
 BRANCH=ubuntu
-OMARCHY_UNITS="bt-agent.service omarchy-sleep-lock.service omarchy-crash-watch.service omarchy-recover-internal-monitor.service omarchy-tailscale-receive.service omarchy-migrate-notify.service omarchy-fcitx5.service"
+# shellcheck source=../lib/units.sh
+source "$PORT_DIR/lib/units.sh"
 
 if [[ -z ${OMARCHY_UPDATE_LOGGED:-} ]]; then
   script_command=$(printf '%q ' "$0" "$@")
@@ -77,7 +78,8 @@ if [[ $base_before != "$target" ]]; then
     "• new migrations reviewed one by one" \
     "• shell restarted at the end" \
     "" \
-    "What's new: https://github.com/omacom/omarchy/releases/tag/$target"
+    "What's new: https://github.com/omacom/omarchy/releases/tag/$target" \
+    "What it means for the port: omarchy-upstream-check --target $target"
   echo
   if [[ ${OMARCHY_UPDATE_UNATTENDED:-} != 1 ]] && ! gum confirm "Continue?"; then
     echo "Cancelled"
@@ -161,17 +163,22 @@ else
   echo "System tweaks match the checkout."
 fi
 
+unhandled=$(REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --unhandled)
+if [[ -n $unhandled ]]; then
+  echo -e "\e[33mNew under upstream's etc/, neither installed nor skipped by the port's step 57:\e[0m"
+  sed 's/^/  /' <<<"$unhandled"
+fi
+
 units_changed=0
-for u in $OMARCHY_UNITS; do
+while IFS= read -r u; do
   src=$OMARCHY_PATH/default/systemd/user/$u
   dst=$HOME/.config/systemd/user/$u
-  [[ -f $src ]] || continue
-  if ! sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" | cmp -s - "$dst"; then
+  if ! sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" | cmp -s - "$dst" 2>/dev/null; then
     sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" >"$dst"
     echo "unit updated: $u"
     units_changed=1
   fi
-done
+done < <(omarchy_units "$OMARCHY_PATH/default/systemd/user")
 if (( units_changed )); then
   systemctl --user daemon-reload
 else

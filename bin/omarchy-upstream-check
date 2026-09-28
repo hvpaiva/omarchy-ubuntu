@@ -1,0 +1,268 @@
+#!/bin/bash
+
+# What the next Omarchy brings for the port, before anything is touched.
+# Works on a throwaway clone: the port's patches are applied on the base tag
+# and rebased onto the target, the package lists and the migrations are
+# diffed, and the upstream directories the port mirrors by hand are listed.
+# Nothing here needs root or changes the checkout, so it runs in CI as well as
+# on the machine (`omarchy-update-ubuntu` points at it before updating).
+#
+#   omarchy-upstream-check                  # pinned tag -> newest release tag
+#   omarchy-upstream-check --branch         # pinned tag -> upstream's default branch
+#   omarchy-upstream-check --base v4.0.3 --target v4.0.4
+#   omarchy-upstream-check --repo <dir|url> # where to read upstream from
+#
+# Output is Markdown (the CI job posts it as an issue). Exit status is 0 when
+# the patches rebase cleanly and every new package has a source on Ubuntu,
+# 1 otherwise, so a job can tell "read this" from "nothing to do".
+
+# shellcheck disable=SC2016  # backticks inside sed programs are Markdown, not expansions
+set -uo pipefail
+
+PORT_DIR=${OMARCHY_UBUNTU_DIR:-$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
+# shellcheck source=../versions.env
+source "$PORT_DIR/versions.env"
+OMARCHY_PATH=${OMARCHY_PATH:-$HOME/.local/share/omarchy}
+
+repo=""
+base=""
+target=""
+branch=0
+while (( $# )); do
+  case $1 in
+    --repo) repo=$2; shift 2 ;;
+    --base) base=$2; shift 2 ;;
+    --target) target=$2; shift 2 ;;
+    --branch) branch=1; shift ;;
+    -h | --help) sed -n '3,19p' "$0"; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+clone=$work/omarchy
+
+# The clone always comes from upstream's URL, without blobs. A local checkout
+# (the machine's dev link) only serves as a reference for the objects it has:
+# it is itself a blobless clone, so sharing it outright would leave the rebase
+# without the files it needs.
+if [[ -z $repo ]]; then
+  if git -C "$OMARCHY_PATH" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    repo=$OMARCHY_PATH
+  else
+    repo=$OMARCHY_REPO
+  fi
+fi
+if [[ -d $repo ]]; then
+  url=$(git -C "$repo" remote get-url origin)
+  git clone --quiet --filter=blob:none --no-checkout --reference-if-able "$repo" "$url" "$clone" || exit 2
+else
+  git clone --quiet --filter=blob:none --no-checkout "$repo" "$clone" || exit 2
+fi
+# Only the directories the patches and the mirrored steps touch are checked
+# out: the themes alone are most of the tree, and none of this reads them.
+git -C "$clone" sparse-checkout set bin default shell etc install config migrations >/dev/null
+git -C "$clone" fetch --quiet --tags origin
+git -C "$clone" remote set-head origin --auto >/dev/null 2>&1
+default_branch=$(git -C "$clone" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
+default_branch=${default_branch#origin/}
+
+g() { git -C "$clone" "$@"; }
+
+if [[ -z $base ]]; then
+  if [[ -d $repo ]] && git -C "$repo" show-ref --verify --quiet refs/heads/"$OMARCHY_BRANCH"; then
+    base=$(git -C "$repo" describe --tags --abbrev=0 "$OMARCHY_BRANCH")
+  else
+    base=$OMARCHY_TAG
+  fi
+fi
+if (( branch )); then
+  target=origin/$default_branch
+elif [[ -z $target ]]; then
+  target=$(g tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -n1)
+fi
+g rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "unknown base: $base" >&2; exit 2; }
+g rev-parse --verify --quiet "$target^{commit}" >/dev/null || { echo "unknown target: $target" >&2; exit 2; }
+
+status=0
+problem() { status=1; }
+
+# A package name is known to the port when it is on one of the apt lists, when
+# omarchy-pkg-ubuntu (the fork's backend) has a recipe or alias for it, or when
+# apt on this machine offers it. The backend's tables are read from the tree
+# the port's patches were applied on, so a recipe added by a newer patch counts.
+resolver=""
+classify_pkg() {
+  local name=$1 apt n
+  if [[ -n $resolver ]]; then
+    if grep -qE "^\s*\[$name\]=" "$resolver"; then
+      echo "recipe or alias in omarchy-pkg-ubuntu"
+      return 0
+    fi
+    apt=$("$resolver" apt-names "$name" 2>/dev/null)
+  else
+    apt=$name
+  fi
+  for n in $apt; do
+    if grep -hqxE "$n(\s.*)?" "$PORT_DIR"/packages/*.txt 2>/dev/null; then
+      echo "on packages/*.txt as $n"
+      return 0
+    fi
+  done
+  if command -v apt-cache >/dev/null 2>&1; then
+    for n in $apt; do
+      if [[ -n $(apt-cache policy "$n" 2>/dev/null | awk '/^  Candidate:/ && $2 != "(none)" { print $2 }') ]]; then
+        echo "apt offers $n here (not on the lists yet)"
+        return 0
+      fi
+    done
+  fi
+  echo "no Ubuntu source known"
+  return 1
+}
+
+pkg_names() {
+  g show "$1:install/omarchy-base.packages" "$1:install/omarchy-other.packages" 2>/dev/null |
+    grep -vE '^\s*(#|$)' | sed 's/\s.*//' | sort -u
+}
+
+echo "# Omarchy $base -> $target"
+echo
+echo "Port \`$(git -C "$PORT_DIR" describe --always --dirty 2>/dev/null)\`, upstream $(g rev-parse --short "$target") ($(g log -1 --format=%cs "$target")), $(g rev-list --count "$base..$target") commits since $base."
+if [[ $target == origin/* ]]; then
+  newest=$(g tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -n1)
+  echo "Preview of the branch \`$default_branch\`; the newest release tag is $newest."
+fi
+echo
+
+echo "## Patches"
+echo
+g checkout --quiet -B check "$base" 2>/dev/null
+if ! g -c user.name=port -c user.email=port@localhost am --quiet "$PORT_DIR"/patches/*.patch 2>"$work/am.err"; then
+  echo "The port's patches no longer apply on $base:"
+  echo
+  sed 's/^/    /' "$work/am.err"
+  g am --abort 2>/dev/null
+  problem
+else
+  resolver=$clone/bin/omarchy-pkg-ubuntu
+  # --onto: only the patches move. Release tags are cut on their own branch, so
+  # the default branch need not contain the base and a plain rebase would
+  # replay upstream's own history.
+  if g -c user.name=port -c user.email=port@localhost rebase --quiet --onto "$target" "$base" check >"$work/rebase.out" 2>&1; then
+    echo "The $(g rev-list --count "$target..check") patches rebase cleanly onto $target."
+  else
+    echo "Rebase conflict in \"$(g log -1 --format=%s REBASE_HEAD 2>/dev/null)\":"
+    echo
+    g diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/'
+    g rebase --abort 2>/dev/null
+    problem
+  fi
+fi
+echo
+
+echo "## Packages"
+echo
+comm -13 <(pkg_names "$base") <(pkg_names "$target") >"$work/added"
+comm -23 <(pkg_names "$base") <(pkg_names "$target") >"$work/removed"
+if [[ ! -s $work/added && ! -s $work/removed ]]; then
+  echo "No change in \`install/omarchy-base.packages\` or \`install/omarchy-other.packages\`."
+else
+  while IFS= read -r name; do
+    if reason=$(classify_pkg "$name"); then
+      echo "- added \`$name\`: $reason"
+    else
+      echo "- added \`$name\`: **$reason**"
+      problem
+    fi
+  done <"$work/added"
+  while IFS= read -r name; do
+    var=$(tr 'a-z-' 'A-Z_' <<<"$name")_VERSION
+    if grep -qE "^$var=" "$PORT_DIR/versions.env"; then
+      echo "- removed \`$name\`: **pinned in versions.env, the port still builds or downloads it**"
+    elif reason=$(classify_pkg "$name") && [[ $reason == on\ packages/* ]]; then
+      echo "- removed \`$name\`: **$reason, drop it there**"
+    else
+      echo "- removed \`$name\`: nothing to do, the port never installed it"
+    fi
+  done <"$work/removed"
+fi
+echo
+
+echo "## Migrations"
+echo
+arch_only='pacman|yay|paru|makepkg|mkinitcpio|limine|systemd-boot|/etc/pacman'
+g diff --name-only --diff-filter=A "$base" "$target" -- migrations >"$work/migrations"
+if [[ ! -s $work/migrations ]]; then
+  echo "None new."
+else
+  while IFS= read -r file; do
+    g show "$target:$file" >"$work/migration"
+    kind="runs as is"
+    grep -qE "$arch_only" "$work/migration" && kind="**Arch tooling, the updater asks**"
+    echo "- \`${file#migrations/}\`: $kind"
+    grep -oE 'omarchy-pkg-add[^|&;>]*' "$work/migration" | sed 's/omarchy-pkg-add//' | tr ' ' '\n' | grep -v '^$' | sort -u |
+      while IFS= read -r name; do
+        if [[ $name == *'$'* ]]; then
+          echo "  - installs $name: a name computed at run time, read the migration"
+          continue
+        fi
+        if reason=$(classify_pkg "$name"); then
+          echo "  - installs \`$name\`: $reason"
+        else
+          echo "  - installs \`$name\`: **$reason**"
+          problem
+        fi
+      done
+  done <"$work/migrations"
+fi
+echo
+
+echo "## Mirrored by hand"
+echo
+# Directories the port reproduces outside the checkout (see docs/deviations.md).
+# A change here means a port step may need the same change.
+mirrored=(
+  etc                        # 57-system-tweaks-root.sh, 58-system-extras-root.sh
+  default/systemd/user       # 65-session.sh and the updater (all units, minus the skip list)
+  install/config             # 55, 57, 58
+  install/user               # 60-config.sh, 65-session.sh
+  install/helpers            # sourced by the mirrored steps
+  config/hypr                # the hyprland.lua and autostart.lua glue, the seeded stubs
+  config/omarchy             # seeded user config
+  bin/omarchy-theme-set-browser-policy
+  bin/omarchy-dns
+)
+g diff --name-status "$base" "$target" -- "${mirrored[@]}" >"$work/mirrored"
+if [[ ! -s $work/mirrored ]]; then
+  echo "Nothing changed in the directories the port mirrors."
+else
+  sed -E 's/^A\t(.*)/- added `\1`/; s/^M\t(.*)/- changed `\1`/; s/^D\t(.*)/- removed `\1`/; s/^R[0-9]*\t(.*)\t(.*)/- renamed `\1` -> `\2`/' "$work/mirrored"
+fi
+g checkout --quiet "$target" 2>/dev/null
+unhandled=$(OMARCHY_PATH=$clone REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --unhandled 2>/dev/null)
+if [[ -n $unhandled ]]; then
+  echo
+  echo "Files under \`etc/\` at $target that step 57 neither installs nor lists as skipped:"
+  echo
+  sed 's/^/- `/; s/$/`/' <<<"$unhandled"
+fi
+echo
+
+echo "## User units"
+echo
+# shellcheck source=../lib/common.sh
+if new_units=$(g diff --name-only --diff-filter=A "$base" "$target" -- default/systemd/user | grep '\.service$'); then
+  while IFS= read -r unit; do
+    if printf '%s\n' "${OMARCHY_UNITS_SKIP[@]}" | grep -qx "$(basename "$unit")"; then
+      echo "- \`$(basename "$unit")\`: on the port's skip list"
+    else
+      echo "- \`$(basename "$unit")\`: the updater installs it; check whether upstream's first-run enables it (\`install/user/first-run/enable-user-units.sh\`)"
+    fi
+  done <<<"$new_units"
+else
+  echo "No new unit."
+fi
+
+exit $status
