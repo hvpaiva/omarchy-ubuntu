@@ -1,0 +1,5 @@
+# Tools Omarchy's configs need at a version Noble does not ship. mise puts them
+# ahead of /usr/bin, so the apt copy (a dependency of other packages) can stay.
+[tools]
+# Omarchy's tmux.conf sets extended-keys-format, which is tmux >= 3.5; apt has 3.4.
+tmux = "latest"
