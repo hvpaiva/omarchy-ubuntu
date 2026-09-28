@@ -56,8 +56,12 @@ install -m 0755 "$SRC_DIR/tensaku/target/release/tensaku-edit" "$LOCAL_BIN/tensa
 
 cargo_app ttfx https://github.com/omacom-io/ttfx "$TTFX_VERSION"
 
-log "herdr $HERDR_VERSION and cliamp $CLIAMP_VERSION (mise, GitHub releases)"
-mise use --global "herdr@${HERDR_VERSION#v}" "cliamp@${CLIAMP_VERSION#v}"
+# `mise use --global` rewrites ~/.config/mise/config.toml, so only when a version is missing:
+# a user who manages that file (pinning "latest", say) keeps it on re-runs
+if ! mise where "herdr@${HERDR_VERSION#v}" >/dev/null 2>&1 || ! mise where "cliamp@${CLIAMP_VERSION#v}" >/dev/null 2>&1; then
+  log "herdr $HERDR_VERSION and cliamp $CLIAMP_VERSION (mise, GitHub releases)"
+  mise use --global "herdr@${HERDR_VERSION#v}" "cliamp@${CLIAMP_VERSION#v}"
+fi
 
 cargo_app hyprland-preview-share-picker https://github.com/WhySoBad/hyprland-preview-share-picker "$SHARE_PICKER_VERSION"
 
