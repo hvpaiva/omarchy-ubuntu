@@ -8,6 +8,14 @@ if ! ls /etc/apt/sources.list.d/ | grep -q cppiber; then
   add-apt-repository -y ppa:cppiber/hyprland
 fi
 
+# Omarchy's base ships the 1Password app and CLI; on Ubuntu they come from 1Password's
+# own repository (its packages keep the source file current once installed)
+log "1Password repository (app and CLI, as Omarchy's base)"
+if ! grep -rqs 'downloads.1password.com' /etc/apt/sources.list.d/; then
+  curl -fsSL https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor -o /usr/share/keyrings/1password-archive-keyring.gpg
+  echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/amd64 stable main' >/etc/apt/sources.list.d/1password.list
+fi
+
 apt-get update -qq
 
 read_list() { grep -vE '^\s*(#|$)' "$1"; }

@@ -8,6 +8,10 @@ hyprsunset
 uwsm
 wayland-protocols
 
+# Secrets (1Password repository, added by install/10-apt-root.sh)
+1password
+1password-cli
+
 # Portals, session, auth
 xdg-desktop-portal
 xdg-desktop-portal-gtk
