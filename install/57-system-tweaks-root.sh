@@ -24,6 +24,7 @@ upstream_files=(
   etc/sysctl.d/90-omarchy-file-watchers.conf
   etc/sysctl.d/99-omarchy-sysctl.conf
   etc/modprobe.d/omarchy-usb-autosuspend.conf
+  etc/udev/rules.d/60-omarchy-io-scheduler.rules
   etc/sudoers.d/omarchy-passwd-tries
   etc/sudoers.d/omarchy-tzupdate
   etc/sudoers.d/omarchy-dns
@@ -58,9 +59,17 @@ skipped_files=(
   etc/sysusers.d/omarchy-cups-browsed.conf                # 58
   etc/tmpfiles.d/omarchy-zswap.conf                       # 58: zram instead
 )
+# A file listed above may not exist yet at the checkout's tag (added upstream
+# and prepared here ahead of the release): it is skipped until it appears.
+present_upstream_files() {
+  local f
+  for f in "${upstream_files[@]}"; do
+    [[ -f $OMARCHY_PATH/$f ]] && printf '%s\n' "$f"
+  done
+}
 case ${1:-} in
   --manifest)
-    (cd "$OMARCHY_PATH" && sha256sum "${upstream_files[@]}")
+    (cd "$OMARCHY_PATH" && present_upstream_files | xargs -r sha256sum)
     exit 0
     ;;
   --unhandled)
@@ -71,7 +80,10 @@ case ${1:-} in
 esac
 need_root
 
-from_upstream() { install_file "$1" "/$2" <"$OMARCHY_PATH/$2"; }
+from_upstream() {
+  [[ -f $OMARCHY_PATH/$2 ]] || { note "not yet upstream: $2"; return 0; }
+  install_file "$1" "/$2" <"$OMARCHY_PATH/$2"
+}
 
 log "logind: power key opens Omarchy's power menu instead of powering off"
 from_upstream 644 etc/systemd/logind.conf.d/10-ignore-power-button.conf
@@ -97,6 +109,14 @@ log "kernel: inotify watches, USB autosuspend off"
 from_upstream 644 etc/sysctl.d/90-omarchy-file-watchers.conf
 from_upstream 644 etc/sysctl.d/99-omarchy-sysctl.conf
 from_upstream 644 etc/modprobe.d/omarchy-usb-autosuspend.conf
+# Kyber is a module on Ubuntu's kernel (built in on Omarchy's); modules-load runs
+# before udev's coldplug, so the scheduler exists when the rule applies.
+if [[ -f $OMARCHY_PATH/etc/udev/rules.d/60-omarchy-io-scheduler.rules ]]; then
+  from_upstream 644 etc/udev/rules.d/60-omarchy-io-scheduler.rules
+  install_file 644 /etc/modules-load.d/omarchy-kyber.conf <<'EOF'
+kyber-iosched
+EOF
+fi
 install_file 644 /etc/tmpfiles.d/omarchy-usb-autosuspend.conf <<'EOF'
 w /sys/module/usbcore/parameters/autosuspend - - - - -1
 EOF
@@ -161,5 +181,5 @@ note "logind, sysctl and modprobe changes apply fully after a reboot"
 # Remember what was applied so the updater can tell when upstream changes it.
 applied=$REPO_DIR/.applied
 install -d -o "$OMARCHY_USER" -g "$OMARCHY_USER" "$applied"
-(cd "$OMARCHY_PATH" && sha256sum "${upstream_files[@]}") >"$applied/57-system-tweaks.sha256"
+(cd "$OMARCHY_PATH" && present_upstream_files | xargs -r sha256sum) >"$applied/57-system-tweaks.sha256"
 chown "$OMARCHY_USER:$OMARCHY_USER" "$applied/57-system-tweaks.sha256"

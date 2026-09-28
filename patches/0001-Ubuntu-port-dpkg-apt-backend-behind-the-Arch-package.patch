@@ -1,40 +1,31 @@
-From dc23773de85410bf058700e640ff1763bd4344e1 Mon Sep 17 00:00:00 2001
-From: Highlander Paiva <highlander.paiva@rdstation.com>
-Date: Wed, 23 Sep 2026 11:50:13 -0300
-Subject: [PATCH 09/11] Ubuntu port: package backend with vendor sources for
- what apt lacks
+From 5725e8414e76028fd0fea12185b56225e3c123f0 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <contact@hvpaiva.dev>
+Date: Mon, 28 Sep 2026 14:58:08 -0300
+Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
+ helpers
 
-The Install menu failed for every package that was not installed yet:
-omarchy-pkg-add looked for "Candidate:" in apt-cache's output, which is
-translated under a pt_BR locale. Past that, a third of the menu named
-packages apt does not carry (AUR and Omarchy's own repository), and
-omarchy-pkg-aur-add still called yay.
-
-omarchy-pkg-ubuntu resolves an Arch name under LC_ALL=C to, in order:
-an apt alias (php-cli, libyaml-dev, freerdp3-x11, python3-gpg...), or a
-recipe: the vendor's apt pool (Grok Bot, ChatGPT, Perplexity, Edge, whose
-.debs register their own sources), a vendor apt repository (Brave, Signal,
-Sublime Text, NordVPN), a vendor .deb (LM Studio, Bitwarden, Minecraft,
-Heroic, Sunshine, umu-launcher), the package from pkgs.omarchy.org
-extracted with a manifest and its sha256 checked (ONCE, omazed,
-omarchy-emacs, T3 Code, OpenClaw, Hermes Desktop with node-pty rebuilt
-for noble's glibc, xpadneo through dkms), a flatpak (Moonlight), mise
-(Helix, Bitwarden CLI, Symfony CLI), Nerd Fonts release archives,
-i386 multiarch (Steam, lib32 Vulkan/NVIDIA), libretro buildbot cores and
-assets at Arch's paths, Zed's installer and Zen's tarball in /opt.
-
-omarchy-pkg-installed/add/drop and omarchy-pkg-aur-add go through it,
-omarchy-install-and-launch takes the flatpak id as the desktop id, and
-the AUR entry is hidden when yay is absent.
+Each omarchy-pkg-* helper keeps upstream's body untouched and hands over to
+omarchy-pkg-ubuntu in one line when there is no pacman, so upstream can
+rewrite its pacman calls without touching the port's patch. The backend
+resolves Arch names to apt aliases and recipes (vendor repositories and
+.debs, Omarchy's packages, flatpaks, mise, Nerd Fonts, i386, libretro),
+and carries the fuzzy pickers over apt. The menu's package guards read
+dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
 ---
- bin/omarchy-install-and-launch     |   4 +
- bin/omarchy-pkg-add                |  28 +-
- bin/omarchy-pkg-aur-add            |   4 +
- bin/omarchy-pkg-drop               |  27 +-
- bin/omarchy-pkg-installed          |  77 +--
- bin/omarchy-pkg-ubuntu             | 804 +++++++++++++++++++++++++++++
- default/omarchy/omarchy-menu.jsonc |   2 +-
- 7 files changed, 817 insertions(+), 129 deletions(-)
+ bin/omarchy-install-and-launch  |   4 +
+ bin/omarchy-pkg-add             |   3 +
+ bin/omarchy-pkg-aur-add         |   4 +
+ bin/omarchy-pkg-aur-install     |   6 +
+ bin/omarchy-pkg-drop            |   3 +
+ bin/omarchy-pkg-install         |   3 +
+ bin/omarchy-pkg-installed       |  18 +
+ bin/omarchy-pkg-missing         |   3 +
+ bin/omarchy-pkg-present         |   3 +
+ bin/omarchy-pkg-remove          |   3 +
+ bin/omarchy-pkg-ubuntu          | 860 ++++++++++++++++++++++++++++++++
+ shell/plugins/menu/MenuModel.js |  15 +-
+ 12 files changed, 924 insertions(+), 1 deletion(-)
+ create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
 diff --git a/bin/omarchy-install-and-launch b/bin/omarchy-install-and-launch
@@ -53,42 +44,17 @@ index 2a7e547c..8ff9e4e1 100755
  printf -v desktop_id_arg '%q' "$desktop_id"
  
 diff --git a/bin/omarchy-pkg-add b/bin/omarchy-pkg-add
-index 422946d7..ed7886a0 100755
+index 977d7efd..498ec743 100755
 --- a/bin/omarchy-pkg-add
 +++ b/bin/omarchy-pkg-add
-@@ -6,33 +6,7 @@
+@@ -5,6 +5,9 @@
+ # omarchy:examples=omarchy pkg add jq ripgrep
  # omarchy:requires-sudo=true
  
- if ! command -v pacman &>/dev/null; then
--  # Ubuntu port: apt stands in for pacman. Names are the Arch ones, resolved
--  # through omarchy-pkg-installed --apt-names. There is no AUR, so a name with
--  # no apt candidate has to be installed by hand (snap, flatpak, .deb, source).
--  apt_pkgs=()
--  for pkg in "$@"; do
--    omarchy-pkg-installed "$pkg" && continue
--    candidate=""
--    for name in $(omarchy-pkg-installed --apt-names "$pkg"); do
--      if apt-cache policy "$name" 2>/dev/null | grep -q '^  Candidate: [^(]'; then
--        candidate=$name
--        break
--      fi
--    done
--    if [[ -z $candidate ]]; then
--      echo -e "\033[31mError: no apt package for '$pkg' on Ubuntu. Install it by hand (snap, flatpak, .deb, or source).\033[0m" >&2
--      exit 1
--    fi
--    apt_pkgs+=("$candidate")
--  done
--
--  if (( ${#apt_pkgs[@]} > 0 )); then
--    if (( EUID == 0 )); then
--      apt-get install -y "${apt_pkgs[@]}" || exit 1
--    else
--      sudo apt-get install -y "${apt_pkgs[@]}" || exit 1
--    fi
--  fi
-+  omarchy-pkg-ubuntu install "$@" || exit 1
- elif omarchy-pkg-missing "$@"; then
++# Ubuntu port: without pacman the apt-backed backend takes the same names.
++command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu add "$@"
++
+ if omarchy-pkg-missing "$@"; then
    if (( EUID == 0 )); then
      pacman -S --noconfirm --needed "$@" || exit 1
 diff --git a/bin/omarchy-pkg-aur-add b/bin/omarchy-pkg-aur-add
@@ -106,147 +72,127 @@ index 7a152be7..09b0e8c5 100755
  if omarchy-pkg-missing "$@"; then
    yay -S --noconfirm --needed "$@" || exit 1
  fi
+diff --git a/bin/omarchy-pkg-aur-install b/bin/omarchy-pkg-aur-install
+index 3d38b4db..0539064d 100755
+--- a/bin/omarchy-pkg-aur-install
++++ b/bin/omarchy-pkg-aur-install
+@@ -3,6 +3,12 @@
+ # omarchy:summary=Show a fuzzy-finder TUI for picking new AUR packages to install.
+ # omarchy:requires-sudo=true
+ 
++# Ubuntu port: there is no AUR; the menu entry opens the apt picker instead.
++if ! command -v pacman &>/dev/null; then
++  echo "No AUR on Ubuntu: picking from apt instead."
++  exec omarchy-pkg-ubuntu pick-install
++fi
++
+ fzf_args=(
+   --multi
+   --preview 'yay -Siia {1}'
 diff --git a/bin/omarchy-pkg-drop b/bin/omarchy-pkg-drop
-index 6fad605d..063138eb 100755
+index bfb70598..077cdf6e 100755
 --- a/bin/omarchy-pkg-drop
 +++ b/bin/omarchy-pkg-drop
-@@ -9,32 +9,7 @@ declare -A installed_exact=()
+@@ -4,6 +4,9 @@
+ # omarchy:args=<packages...>
+ # omarchy:requires-sudo=true
+ 
++# Ubuntu port: without pacman the apt-backed backend takes the same names.
++command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu drop "$@"
++
+ installed=()
+ declare -A installed_exact=()
  declare -A selected=()
+diff --git a/bin/omarchy-pkg-install b/bin/omarchy-pkg-install
+index 15e5e288..08105c15 100755
+--- a/bin/omarchy-pkg-install
++++ b/bin/omarchy-pkg-install
+@@ -3,6 +3,9 @@
+ # omarchy:summary=Show a fuzzy-finder TUI for picking new Arch and OPR packages to install.
+ # omarchy:requires-sudo=true
  
- if ! command -v pacman &>/dev/null; then
--  # Ubuntu port: purge the dpkg package, or remove the snap, that answers to
--  # the Arch name (see omarchy-pkg-installed --apt-names).
--  debs=()
--  snaps=()
--  for pkg in "$@"; do
--    for name in $(omarchy-pkg-installed --apt-names "$pkg"); do
--      [[ -z ${selected[$name]} ]] || break
--      if [[ $(dpkg-query -W -f='${db:Status-Abbrev}' "$name" 2>/dev/null) == ?i* ]]; then
--        debs+=("$name")
--        selected[$name]=1
--        break
--      elif snap list "$name" &>/dev/null; then
--        snaps+=("$name")
--        selected[$name]=1
--        break
--      fi
--    done
--  done
--
--  if (( ${#debs[@]} > 0 )); then
--    sudo apt-get purge -y --autoremove "${debs[@]}"
--  fi
--  if (( ${#snaps[@]} > 0 )); then
--    sudo snap remove "${snaps[@]}"
--  fi
--  exit 0
-+  exec omarchy-pkg-ubuntu remove "$@"
- fi
- 
- while IFS= read -r package_name; do
++# Ubuntu port: without pacman the apt-backed backend takes the same names.
++command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu pick-install "$@"
++
+ fzf_args=(
+   --multi
+   --preview 'pacman -Sii {1}'
 diff --git a/bin/omarchy-pkg-installed b/bin/omarchy-pkg-installed
-index 068bfb8e..ade38988 100755
---- a/bin/omarchy-pkg-installed
+new file mode 100755
+index 00000000..ade38988
+--- /dev/null
 +++ b/bin/omarchy-pkg-installed
-@@ -4,44 +4,8 @@
- # omarchy:args=<package> | --apt-names <package>
- # omarchy:hidden=true
- 
--# Ubuntu port. Omarchy names packages the Arch way, so on a system without
--# pacman a name is looked up as an installed dpkg package (or something one
--# provides), a snap, a flatpak whose id contains it, or a command. AUR-style
--# -bin/-git suffixes are dropped and the few names that differ on Ubuntu are
--# mapped below. `--apt-names` prints the apt candidates for a name, in the
--# order omarchy-pkg-add should try them.
--
--set -uo pipefail
--
--declare -A APT_ALIASES=(
--  [google-chrome]="google-chrome-stable"
--  [visual-studio-code-bin]="code"
--  [brave-bin]="brave-browser"
--  [microsoft-edge-stable-bin]="microsoft-edge-stable"
--  [spotify]="spotify-client"
--  [steam]="steam-launcher steam-installer"
--  [sublime-text-4]="sublime-text"
--  [pam-u2f]="libpam-u2f"
--  [dropbox]="nautilus-dropbox dropbox"
--  [libreoffice-fresh]="libreoffice"
--  [docker]="docker-ce docker.io"
--  [docker-compose]="docker-compose-plugin docker-compose-v2"
--)
--
--candidates() {
--  local name=${1%%[<>=]*} base out
--  base=${name%-bin}
--  base=${base%-git}
--  out=$name
--  [[ $base != "$name" ]] && out+=" $base"
--  [[ -n ${APT_ALIASES[$name]-} ]] && out+=" ${APT_ALIASES[$name]}"
--  [[ $base != "$name" && -n ${APT_ALIASES[$base]-} ]] && out+=" ${APT_ALIASES[$base]}"
--  printf '%s\n' $out | awk '!seen[$0]++'
--}
--
- if [[ ${1:-} == "--apt-names" ]]; then
--  candidates "${2:?package name required}"
--  exit 0
+@@ -0,0 +1,18 @@
++#!/bin/bash
++
++# omarchy:summary=Returns true if the named package is installed (pacman, or dpkg/snap/flatpak/command on the Ubuntu port)
++# omarchy:args=<package> | --apt-names <package>
++# omarchy:hidden=true
++
++if [[ ${1:-} == "--apt-names" ]]; then
 +  exec omarchy-pkg-ubuntu apt-names "${2:?package name required}"
- fi
- 
- pkg=${1:?package name required}
-@@ -51,41 +15,4 @@ if command -v pacman &>/dev/null; then
-   exit
- fi
- 
--dpkg_installed() {
--  local status
--  status=$(dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null) || return 1
--  [[ $status == ?i* ]]
--}
--
--# An installed package provides the name (virtual packages, transitional names).
--dpkg_provided() {
--  dpkg-query -W -f='${db:Status-Abbrev}\t${Provides}\n' 2>/dev/null |
--    awk -F'\t' -v want="$1" '
--      $1 ~ /^.i/ {
--        n = split($2, p, ",")
--        for (i = 1; i <= n; i++) {
--          gsub(/^ +| +$| *\(.*\)/, "", p[i])
--          if (p[i] == want) found = 1
--        }
--      }
--      END { exit !found }'
--}
--
--snap_installed() {
--  snap list "$1" &>/dev/null
--}
--
--flatpak_installed() {
--  local needle=${1//-/_}
--  flatpak list --app --columns=application 2>/dev/null | grep -qi -- "$needle"
--}
--
--for name in $(candidates "$pkg"); do
--  dpkg_installed "$name" && exit 0
--  dpkg_provided "$name" && exit 0
--  snap_installed "$name" && exit 0
--  flatpak_installed "$name" && exit 0
--  command -v "$name" &>/dev/null && exit 0
--done
--
--exit 1
++fi
++
++pkg=${1:?package name required}
++
++if command -v pacman &>/dev/null; then
++  pacman -Q "$pkg" &>/dev/null
++  exit
++fi
++
 +exec omarchy-pkg-ubuntu installed "$pkg"
+diff --git a/bin/omarchy-pkg-missing b/bin/omarchy-pkg-missing
+index c4059dff..3c2188a7 100755
+--- a/bin/omarchy-pkg-missing
++++ b/bin/omarchy-pkg-missing
+@@ -3,6 +3,9 @@
+ # omarchy:summary=Returns true if any of the named packages are missing from the system (or false if they're all there).
+ # omarchy:args=<packages...>
+ 
++# Ubuntu port: without pacman the apt-backed backend takes the same names.
++command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu missing "$@"
++
+ for pkg in "$@"; do
+   if ! pacman -Q "$pkg" &>/dev/null; then
+     exit 0
+diff --git a/bin/omarchy-pkg-present b/bin/omarchy-pkg-present
+index 8c4340d6..3ebabdc1 100755
+--- a/bin/omarchy-pkg-present
++++ b/bin/omarchy-pkg-present
+@@ -3,6 +3,9 @@
+ # omarchy:summary=Returns true if all of the named packages are installed on the system (or false if any of them are missing).
+ # omarchy:args=<packages...>
+ 
++# Ubuntu port: without pacman the apt-backed backend takes the same names.
++command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu present "$@"
++
+ for pkg in "$@"; do
+   pacman -Q "$pkg" &>/dev/null || exit 1
+ done
+diff --git a/bin/omarchy-pkg-remove b/bin/omarchy-pkg-remove
+index 486d3772..960ae735 100755
+--- a/bin/omarchy-pkg-remove
++++ b/bin/omarchy-pkg-remove
+@@ -3,6 +3,9 @@
+ # omarchy:summary=Show a fuzzy-finder TUI for picking packages installed on the system to be removed.
+ # omarchy:requires-sudo=true
+ 
++# Ubuntu port: without pacman the apt-backed backend takes the same names.
++command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu pick-remove "$@"
++
+ fzf_args=(
+   --multi
+   --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..3b714b20
+index 00000000..ae8c8396
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,804 @@
+@@ -0,0 +1,860 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
-+# omarchy:args=apt-names|installed|install|remove|launch-id <package...>
++# omarchy:args=apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id <package...>
 +# omarchy:hidden=true
 +# omarchy:requires-sudo=true
 +
@@ -258,6 +204,7 @@ index 00000000..3b714b20
 +
 +declare -A APT_ALIASES=(
 +  [google-chrome]="google-chrome-stable"
++  [vi]="vim-tiny"
 +  [visual-studio-code-bin]="code"
 +  [spotify]="spotify-client"
 +  [pam-u2f]="libpam-u2f"
@@ -284,6 +231,7 @@ index 00000000..3b714b20
 +)
 +
 +declare -A RECIPES=(
++  [dell-xps13-sidecar-amps]="skip Dell XPS 13 DX13260 amplifier enablement built for Arch's kernel and mkinitcpio"
 +  [grok-bot]="pool grok-bot https://downloads.cursor.com/aptrepo grok-bot main"
 +  [openai-codex-desktop]="pool chatgpt https://persistent.oaistatic.com/codex-app-prod/linux/deb stable main"
 +  [perplexity]="pool perplexity https://packages.perplexity.ai/deb stable main"
@@ -1021,6 +969,56 @@ index 00000000..3b714b20
 +  return 0
 +}
 +
++missing() {
++  local pkg
++  for pkg in "$@"; do
++    installed "$pkg" || return 0
++  done
++  return 1
++}
++
++present() {
++  local pkg
++  for pkg in "$@"; do
++    installed "$pkg" || return 1
++  done
++  return 0
++}
++
++# The fuzzy pickers behind omarchy-pkg-install and omarchy-pkg-remove, over apt's
++# package list and the manually installed packages instead of the Arch repos.
++fzf_pick() {
++  local colour=$1
++  fzf --multi \
++    --preview 'apt-cache show {1} | sed -n "1,/^$/p"' \
++    --preview-label='alt-p: toggle description, alt-j/k: scroll, tab: multi-select' \
++    --preview-label-pos='bottom' \
++    --preview-window 'down:65%:wrap' \
++    --bind 'alt-p:toggle-preview' \
++    --bind 'alt-d:preview-half-page-down,alt-u:preview-half-page-up' \
++    --bind 'alt-k:preview-up,alt-j:preview-down' \
++    --color "pointer:$colour,marker:$colour"
++}
++
++pick_install() {
++  local names
++  names=$(apt-cache pkgnames | sort | fzf_pick green)
++  [[ -n $names ]] || return 0
++  source omarchy-sudo-keepalive
++  # shellcheck disable=SC2086
++  sudo apt-get install -y $names
++  omarchy-show-done
++}
++
++pick_remove() {
++  local names
++  names=$(apt-mark showmanual | sort | fzf_pick red)
++  [[ -n $names ]] || return 0
++  # shellcheck disable=SC2086
++  sudo apt-get purge -y --autoremove $names
++  omarchy-show-done
++}
++
 +launch_id() {
 +  local recipe kind id
 +  if recipe=$(recipe_of "$1"); then
@@ -1039,27 +1037,52 @@ index 00000000..3b714b20
 +case $command in
 +apt-names) apt_names "${1:?package name required}" ;;
 +installed) installed "${1:?package name required}" ;;
-+install) install "$@" ;;
-+remove) remove "$@" ;;
++missing) missing "$@" ;;
++present) present "$@" ;;
++add | install) install "$@" ;;
++drop | remove) remove "$@" ;;
++pick-install) pick_install ;;
++pick-remove) pick_remove ;;
 +launch-id) launch_id "${1:?package name required}" "${2:?desktop id required}" ;;
 +*)
-+  echo "Usage: omarchy-pkg-ubuntu apt-names|installed|install|remove|launch-id <package...>" >&2
++  echo "Usage: omarchy-pkg-ubuntu apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id <package...>" >&2
 +  exit 1
 +  ;;
 +esac
-diff --git a/default/omarchy/omarchy-menu.jsonc b/default/omarchy/omarchy-menu.jsonc
-index fb2b31d7..018c37d3 100644
---- a/default/omarchy/omarchy-menu.jsonc
-+++ b/default/omarchy/omarchy-menu.jsonc
-@@ -186,7 +186,7 @@
- 
-   // Install
-   "install.package": {"icon":"󰣇","label":"Package","action":"xdg-terminal-exec --app-id=org.omarchy.terminal omarchy-pkg-install"},
--  "install.aur": {"icon":"󰣇","label":"AUR","action":"xdg-terminal-exec --app-id=org.omarchy.terminal omarchy-pkg-aur-install"},
-+  "install.aur": {"icon":"󰣇","label":"AUR","when":"omarchy-cmd-present yay","action":"xdg-terminal-exec --app-id=org.omarchy.terminal omarchy-pkg-aur-install"},
-   "install.webapp": {"icon":"","label":"Web App","action":"omarchy-launch-floating-terminal-with-presentation omarchy-webapp-install"},
-   "install.tui": {"icon":"","label":"TUI","action":"omarchy-launch-floating-terminal-with-presentation omarchy-tui-install"},
-   "install.style": {"icon":"","label":"Style"},
+diff --git a/shell/plugins/menu/MenuModel.js b/shell/plugins/menu/MenuModel.js
+index c6dc7ed3..d46c3ce1 100644
+--- a/shell/plugins/menu/MenuModel.js
++++ b/shell/plugins/menu/MenuModel.js
+@@ -407,15 +407,28 @@ var GUARD_READERS = [
+ // is set in the environment, which a login shell may well have done, so the
+ // parser follows the indented lines rather than reading the first one and
+ // dropping half of what is installed.
++//
++// Ubuntu port: without pacman the set is filled from dpkg (installed packages
++// and what they provide) plus the installed snaps, and a name outside the set
++// is handed to omarchy-pkg-installed, which knows the Ubuntu aliases, the
++// flatpaks and the command fallback.
+ function guardHelpers() {
+   return 'declare -A __omarchy_pkgs=()\n'
++    + 'if command -v pacman &>/dev/null; then\n'
+     + 'mapfile -t __omarchy_pkg_names < <({ pacman -Qq; LC_ALL=C pacman -Qi'
+     + " | awk '/^[A-Za-z]/ { provides = ($0 ~ /^Provides/); sub(/^[^:]*: /, \"\") }"
+     + ' provides && $0 != "None" { n = split($0, p, " ");'
+     + ' for (i = 1; i <= n; i++) { sub(/[<>=].*/, "", p[i]); print p[i] } }\'; } 2>/dev/null)\n'
++    + 'else\n'
++    + "mapfile -t __omarchy_pkg_names < <({ dpkg-query -W -f='${db:Status-Abbrev}\\t${binary:Package}\\t${Provides}\\n'"
++    + " | awk -F'\\t' '$1 ~ /^.i/ { sub(/:.*/, \"\", $2); print $2; n = split($3, p, \",\");"
++    + ' for (i = 1; i <= n; i++) { gsub(/^ +| +$| *\\(.*\\)/, "", p[i]); if (p[i] != "") print p[i] } }\';'
++    + " snap list 2>/dev/null | awk 'NR > 1 { print $1 }'; } 2>/dev/null)\n"
++    + 'fi\n'
+     + 'for __omarchy_pkg in "${__omarchy_pkg_names[@]}"; do __omarchy_pkgs[$__omarchy_pkg]=1; done\n'
+     + '__omarchy_pkg_has() { [[ -n ${__omarchy_pkgs[$1]-} ]] && return 0; '
+-    + '[[ $1 == *[\\<\\>=]* ]] && { pacman -Q "$1" &>/dev/null; return; }; return 1; }\n'
++    + 'if command -v pacman &>/dev/null; then [[ $1 == *[\\<\\>=]* ]] && { pacman -Q "$1" &>/dev/null; return; }; return 1; fi; '
++    + 'omarchy-pkg-installed "$1"; }\n'
+     + 'omarchy-pkg-present() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 1; done; return 0; }\n'
+     + 'omarchy-pkg-missing() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 0; done; return 1; }\n'
+     + 'omarchy-cmd-present() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0; }\n'
 -- 
-2.43.0
+2.55.0
 

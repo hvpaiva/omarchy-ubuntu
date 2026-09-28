@@ -1,7 +1,7 @@
-From e7597ad85b26ab7b014222d09ba22cec37a699f5 Mon Sep 17 00:00:00 2001
+From e90a1ad0c61a43d4168806c3073b45ad8dfeec21 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:08:29 -0300
-Subject: [PATCH 4/6] Ubuntu port: render the foot theme into [colors]
+Subject: [PATCH 04/12] Ubuntu port: render the foot theme into [colors]
 
 Ubuntu 24.04 ships foot 1.16, which rejects the [colors-dark] section
 that newer foot uses for scheme-aware palettes, so every theme switch
@@ -22,5 +22,5 @@ index a3764b20..ae766e07 100644
  background={{ background_strip }}
  selection-foreground={{ selection_foreground_strip }}
 -- 
-2.43.0
+2.55.0
 

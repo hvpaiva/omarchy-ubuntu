@@ -63,3 +63,23 @@ exec convert "$@"
 EOF
   note "installed /usr/bin/magick shim (omarchy-plymouth-set runs with PATH=/usr/bin:/bin)"
 fi
+
+# libvips 8.15 (noble) spells vipsthumbnail's output option -o; upstream's
+# scripts pass --path (8.16+). A wrapper ahead of /usr/bin keeps the scripts
+# untouched.
+install -Dm755 /dev/stdin /usr/local/bin/vipsthumbnail <<'EOF'
+#!/bin/sh
+# Ubuntu 24.04 ships libvips 8.15, whose vipsthumbnail takes -o where 8.16+ takes --path.
+set -- "$@" --
+while [ "$1" != -- ]; do
+  case $1 in
+    --path) set -- "$@" -o ;;
+    --path=*) set -- "$@" -o "${1#--path=}" ;;
+    *) set -- "$@" "$1" ;;
+  esac
+  shift
+done
+shift
+exec /usr/bin/vipsthumbnail "$@"
+EOF
+note "installed /usr/local/bin/vipsthumbnail wrapper (--path -> -o)"
