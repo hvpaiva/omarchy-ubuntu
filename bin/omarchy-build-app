@@ -13,7 +13,7 @@
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 need_user
 
-export PATH="$QT_DIR/bin:$PATH"
+export PATH="$QT_DIR/bin:$OMARCHY_HOME/.local/share/mise/shims:$PATH"
 APPS_DIR=$OMARCHY_HOME/.local/share/applications
 ICONS_DIR=$OMARCHY_HOME/.local/share/icons/hicolor/scalable/apps
 mkdir -p "$LOCAL_BIN" "$APPS_DIR" "$ICONS_DIR" "$SRC_DIR"
@@ -80,8 +80,21 @@ cmake_build() { # cmake_build <source dir> <build dir> <extra cmake args...>
 # ECM and layer-shell-qt go into the Qt tree itself: that is the prefix every
 # cmake call here searches, and KDE's install dirs then follow Qt's layout
 # (the shell-integration plugin lands in plugins/wayland-shell-integration).
+# ECM's cmake_minimum_required is 3.29; noble ships 3.28. mise, as for the
+# other tools the port takes from it, ahead of apt's through the shims.
+ensure_cmake() {
+  local have
+  have=$(cmake --version 2>/dev/null | awk 'NR == 1 { print $3 }')
+  [[ $(printf '%s\n' 3.29 "$have" | sort -V | head -n1) == 3.29 ]] && return 0
+  log "cmake $CMAKE_VERSION (mise; apt's $have is older than ECM's 3.29)"
+  mise use --global "cmake@$CMAKE_VERSION" >/dev/null
+  hash -r
+  cmake --version | grep -q " $CMAKE_VERSION" || die "cmake $CMAKE_VERSION not first on PATH after mise use"
+}
+
 ensure_ecm() {
   [[ -f $QT_DIR/share/ECM/cmake/ECMConfig.cmake ]] && return 0
+  ensure_cmake
   log "extra-cmake-modules $ECM_VERSION (into $QT_DIR)"
   git_checkout "$SRC_DIR/extra-cmake-modules" https://github.com/KDE/extra-cmake-modules "$ECM_VERSION"
   cmake_build "$SRC_DIR/extra-cmake-modules" "$SRC_DIR/extra-cmake-modules/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF -DBUILD_HTML_DOCS=OFF -DBUILD_MAN_DOCS=OFF -DBUILD_QTHELP_DOCS=OFF
