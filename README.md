@@ -60,6 +60,11 @@ Personal files are never overwritten: existing `~/.config/hypr/*.lua`,
 terminal configs and `~/.bashrc` are backed up with a `.bak-omarchy` suffix the
 first time and left alone afterwards. `monitors.lua` is yours to edit.
 
+Personal configuration is not this project's business: it lives in
+[hvpaiva/dotfiles](https://github.com/hvpaiva/dotfiles), whose bootstrap runs this one first
+on Ubuntu and then layers the personal files on top. `docs/deviations.md` lists which files
+this port itself writes into `$HOME`, so that layer knows what not to track.
+
 ## Layout
 
 | Path | Purpose |
