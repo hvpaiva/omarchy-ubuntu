@@ -19,6 +19,7 @@ Everything not listed here is upstream's own code and configuration, unchanged.
 | Browser policy | helper in `/usr/bin`, `%wheel` sudoers | copy of the helper in `/usr/bin`, `%sudo`; Firefox skipped (snap) | packaged path is hard-coded upstream |
 | Input method | fcitx5 from pacman | fcitx5 from apt; Ubuntu's IBus autostart hidden | uwsm honours XDG autostart |
 | Screen recorder capability | package `.install` sets it | `setcap` in the root step on `~/.local/bin/gsr-kms-server` | user-local install |
+| tmux | 3.7 from pacman | apt 3.4 stays (byobu depends on it); `/etc/mise/conf.d/omarchy-ubuntu.toml` puts mise's tmux first | Omarchy's tmux.conf uses `extended-keys-format` (3.5+) |
 | Fonts | `ttf-jetbrains-mono-nerd`, `ttf-cascadia-mono-nerd` | Nerd Fonts release archives into `~/.local/share/fonts` | not packaged |
 | Bash | skel bashrc sources Omarchy's `default/bash/rc` | only the env-bootstrap block is added; your shell config stays | personal choice; `default/bash/completions` is worth sourcing |
 | Chromium | Arch's `chromium`; launcher reads `~/.config/chromium-flags.conf`; Omarchy's initial preferences | Debian's `chromium` from the xtradeb PPA, pinned so nothing else comes from it; `/etc/chromium.d/omarchy-user-flags` reads the flags file; Debian's first-run preferences diverted, Omarchy's in place; AppArmor profile granting `userns` | Ubuntu ships Chromium only as a snap, whose desktop file name, confinement and policy path break Omarchy's launchers, extensions and theme policy |
