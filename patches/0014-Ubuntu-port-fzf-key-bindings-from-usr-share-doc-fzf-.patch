@@ -1,0 +1,37 @@
+From 260829ea2baa3ee0e2bc6373404da9a86542184c Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Mon, 28 Sep 2026 00:37:13 -0300
+Subject: [PATCH 14/14] Ubuntu port: fzf key bindings from
+ /usr/share/doc/fzf/examples
+
+---
+ default/bash/init | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/default/bash/init b/default/bash/init
+index c3d8c97a..1241fab4 100644
+--- a/default/bash/init
++++ b/default/bash/init
+@@ -19,12 +19,13 @@ if command -v try &> /dev/null; then
+ fi
+ 
+ if command -v fzf &> /dev/null; then
+-  if [[ -f /usr/share/fzf/completion.bash ]]; then
+-    source /usr/share/fzf/completion.bash
+-  fi
+-  if [[ -f /usr/share/fzf/key-bindings.bash ]]; then
+-    source /usr/share/fzf/key-bindings.bash
+-  fi
++  # Arch ships the shell files in /usr/share/fzf, Ubuntu's package in /usr/share/doc/fzf/examples
++  # (its completion comes through bash-completion instead)
++  for fzf_dir in /usr/share/fzf /usr/share/doc/fzf/examples; do
++    [[ -f \/completion.bash ]] && source "\/completion.bash"
++    [[ -f \/key-bindings.bash ]] && source "\/key-bindings.bash"
++  done
++  unset fzf_dir
+ fi
+ 
+ source "$OMARCHY_PATH/default/bash/completions"
+-- 
+2.43.0
+
