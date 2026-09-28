@@ -56,9 +56,10 @@ cannot unlock Ubuntu's `login` keyring, which is encrypted with your password;
 run `bin/omarchy-keyring-passwordless` once from a terminal to get Omarchy's
 passwordless default keyring (see [docs/gotchas.md](docs/gotchas.md)).
 
-Personal files are never overwritten: existing `~/.config/hypr/*.lua`,
-terminal configs and `~/.bashrc` are backed up with a `.bak-omarchy` suffix the
-first time and left alone afterwards. `monitors.lua` is yours to edit.
+Personal files are never overwritten: existing `~/.config/hypr/*.lua` and
+`~/.bashrc` are backed up with a `.bak-omarchy` suffix the first time and left
+alone afterwards; a terminal config that already exists is kept as it is.
+`monitors.lua` is yours to edit.
 
 Personal configuration is not this project's business: it lives in
 [hvpaiva/dotfiles](https://github.com/hvpaiva/dotfiles), whose bootstrap runs this one first
