@@ -1,7 +1,7 @@
-From ef90ef494a66a1ba3569e0262fc811cd700518ca Mon Sep 17 00:00:00 2001
+From 5ea140238bba2ec8f94924b35c86470e9e38d601 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Mon, 28 Sep 2026 00:37:13 -0300
-Subject: [PATCH 14/14] Ubuntu port: fzf key bindings from
+Subject: [PATCH 12/12] Ubuntu port: fzf key bindings from
  /usr/share/doc/fzf/examples
 
 ---
@@ -33,5 +33,5 @@ index c3d8c97a..48fb2adb 100644
  
  source "$OMARCHY_PATH/default/bash/completions"
 -- 
-2.43.0
+2.55.0
 
