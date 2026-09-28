@@ -65,7 +65,7 @@ case ${1:-} in
     ;;
   --unhandled)
     (cd "$OMARCHY_PATH" && find etc -type f | sort) |
-      grep -vxF -f <(printf '%s\n' "${upstream_files[@]}" "${skipped_files[@]}")
+      grep -vxF -f <(printf '%s\n' "${upstream_files[@]}" "${skipped_files[@]}") || true
     exit 0
     ;;
 esac
