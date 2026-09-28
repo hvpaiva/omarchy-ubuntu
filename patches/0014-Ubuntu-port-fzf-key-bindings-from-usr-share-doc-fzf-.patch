@@ -1,4 +1,4 @@
-From 260829ea2baa3ee0e2bc6373404da9a86542184c Mon Sep 17 00:00:00 2001
+From ef90ef494a66a1ba3569e0262fc811cd700518ca Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Mon, 28 Sep 2026 00:37:13 -0300
 Subject: [PATCH 14/14] Ubuntu port: fzf key bindings from
@@ -9,7 +9,7 @@ Subject: [PATCH 14/14] Ubuntu port: fzf key bindings from
  1 file changed, 7 insertions(+), 6 deletions(-)
 
 diff --git a/default/bash/init b/default/bash/init
-index c3d8c97a..1241fab4 100644
+index c3d8c97a..48fb2adb 100644
 --- a/default/bash/init
 +++ b/default/bash/init
 @@ -19,12 +19,13 @@ if command -v try &> /dev/null; then
@@ -25,8 +25,8 @@ index c3d8c97a..1241fab4 100644
 +  # Arch ships the shell files in /usr/share/fzf, Ubuntu's package in /usr/share/doc/fzf/examples
 +  # (its completion comes through bash-completion instead)
 +  for fzf_dir in /usr/share/fzf /usr/share/doc/fzf/examples; do
-+    [[ -f \/completion.bash ]] && source "\/completion.bash"
-+    [[ -f \/key-bindings.bash ]] && source "\/key-bindings.bash"
++    [[ -f $fzf_dir/completion.bash ]] && source "$fzf_dir/completion.bash"
++    [[ -f $fzf_dir/key-bindings.bash ]] && source "$fzf_dir/key-bindings.bash"
 +  done
 +  unset fzf_dir
  fi
