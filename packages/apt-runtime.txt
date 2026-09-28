@@ -15,6 +15,9 @@ wayland-protocols
 # Network (Tailscale repository, added by install/10-apt-root.sh)
 tailscale
 
+# Editor (PPA neovim-ppa/stable, added by install/10-apt-root.sh)
+neovim
+
 # Portals, session, auth
 xdg-desktop-portal
 xdg-desktop-portal-gtk

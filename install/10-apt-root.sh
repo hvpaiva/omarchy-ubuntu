@@ -8,6 +8,12 @@ if ! ls /etc/apt/sources.list.d/ | grep -q cppiber; then
   add-apt-repository -y ppa:cppiber/hyprland
 fi
 
+# Omarchy's editor: Noble's neovim is 0.9, the config wants a current one
+log "Neovim PPA (neovim-ppa/stable)"
+if ! grep -rqs 'neovim-ppa' /etc/apt/sources.list.d/; then
+  add-apt-repository -y ppa:neovim-ppa/stable
+fi
+
 # Omarchy's base ships the 1Password app and CLI; on Ubuntu they come from 1Password's
 # own repository (its packages keep the source file current once installed)
 log "1Password repository (app and CLI, as Omarchy's base)"
