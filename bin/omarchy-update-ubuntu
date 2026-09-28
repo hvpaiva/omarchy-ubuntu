@@ -32,13 +32,12 @@ fi
 trap 'echo -e "\n\033[0;31mSomething went wrong during the update. Review the output above (log in '"$LOG"').\033[0m"' ERR
 trap 'omarchy-update-stay-awake stop' EXIT
 
+# On a terminal sudo asks there; from the shell's menu the polkit dialog asks.
 run_root() {
-  if [[ -t 0 ]]; then
+  if [[ -t 0 ]] || ! command -v pkexec >/dev/null 2>&1; then
     sudo "$@"
-  elif command -v pkexec >/dev/null 2>&1; then
-    pkexec "$@"
   else
-    sudo ${SUDO_ASKPASS:+-A} "$@"
+    pkexec "$@"
   fi
 }
 

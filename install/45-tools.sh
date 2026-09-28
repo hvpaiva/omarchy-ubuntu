@@ -31,8 +31,8 @@ if ! pkg-config --exists 'gtk4-layer-shell-0 >= 1.0'; then
   git_checkout "$SRC_DIR/gtk4-layer-shell" https://github.com/wmww/gtk4-layer-shell "$GTK4_LAYER_SHELL_VERSION"
   meson setup "$SRC_DIR/gtk4-layer-shell/build" "$SRC_DIR/gtk4-layer-shell" --prefix=/usr/local >/dev/null
   ninja -C "$SRC_DIR/gtk4-layer-shell/build"
-  sudo ${SUDO_ASKPASS:+-A} ninja -C "$SRC_DIR/gtk4-layer-shell/build" install >/dev/null
-  sudo ${SUDO_ASKPASS:+-A} ldconfig
+  sudo ninja -C "$SRC_DIR/gtk4-layer-shell/build" install >/dev/null
+  sudo ldconfig
 fi
 
 # xdg-terminal-exec: Omarchy launches every terminal through it.
