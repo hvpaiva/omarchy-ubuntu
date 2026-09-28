@@ -33,3 +33,20 @@ Everything not listed here is upstream's own code and configuration, unchanged.
 | Not ported | mkinitcpio, limine, sddm, faillock, nsswitch, ufw-docker | left to Ubuntu | Arch boot stack, no faillock in Ubuntu's PAM, `nsswitch` carries `sss` for the corporate login |
 | Global user units | Arch enables none | `foot-server`, `fumon` and `hyprsunset` globally disabled | Ubuntu's presets enable them for every session; Omarchy starts hyprsunset from the nightlight toggle only |
 | Fontconfig defaults | `50-omarchy.conf` in `/etc/fonts/conf.d` | same file in `~/.config/fontconfig/conf.d` minus its `monospace` assign; `omarchy-font-set` writes the monospace default to `fonts.conf` at install | noble's fontconfig 2.15 applies the strong assign before font-set's `prepend_first`, whose `monospace` test then never matches, so a chosen font never took effect |
+
+## Files this port writes into `$HOME`
+
+Upstream installs these system-wide (`/usr/lib`, `/etc`, `/usr/share`). The port puts them in the
+user's home, so a dotfiles layer must treat them as Omarchy's, not the user's:
+
+| Path | Upstream location |
+|---|---|
+| `~/.config/systemd/user/omarchy-*.service`, `bt-agent.service`, `voxtype.service` | `/usr/lib/systemd/user/` |
+| `~/.config/uwsm/env` (the `omarchy-ubuntu env-bootstrap` block) | `/usr/share/uwsm/env.d/10-omarchy` |
+| `~/.config/fontconfig/conf.d/50-omarchy.conf` | `/etc/fonts/conf.d/50-omarchy.conf` |
+| `~/.config/environment.d/10-omarchy-fcitx.conf` | `/usr/lib/environment.d/` |
+| `~/.config/xdg-desktop-portal/hyprland-portals.conf` | `/usr/share/xdg-desktop-portal/` |
+| `~/.config/omarchy/hooks/post-update.d/{install-voxtype,setup-fingerprint}.hook` | package post-install |
+| `~/.config/hypr/hyprland.lua`, `~/.config/hypr/autostart.lua` (Ubuntu/GDM glue) | Omarchy's templates, unchanged |
+| `~/.config/autostart/*.desktop` with `Hidden=true` | not needed on Arch |
+| the `env-bootstrap` block at the top of `~/.bashrc` | `/etc/skel/.bashrc` |
