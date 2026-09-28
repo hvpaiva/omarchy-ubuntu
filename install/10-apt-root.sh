@@ -16,6 +16,14 @@ if ! grep -rqs 'downloads.1password.com' /etc/apt/sources.list.d/; then
   echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/amd64 stable main' >/etc/apt/sources.list.d/1password.list
 fi
 
+# Omarchy's bar has a Tailscale widget and dots setup joins the tailnet: the package
+# comes from Tailscale's repository
+log "Tailscale repository"
+if ! grep -rqs 'pkgs.tailscale.com' /etc/apt/sources.list.d/; then
+  curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
+  curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
+fi
+
 apt-get update -qq
 
 read_list() { grep -vE '^\s*(#|$)' "$1"; }
