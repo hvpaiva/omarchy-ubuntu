@@ -12,6 +12,9 @@ wayland-protocols
 1password
 1password-cli
 
+# Network (Tailscale repository, added by install/10-apt-root.sh)
+tailscale
+
 # Portals, session, auth
 xdg-desktop-portal
 xdg-desktop-portal-gtk
