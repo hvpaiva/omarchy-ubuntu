@@ -25,16 +25,16 @@ die() { printf '\e[31mxx  %s\e[0m\n' "$*" >&2; exit 1; }
 need_root() { (( EUID == 0 )) || die "this step must run as root (the bootstrap runs it through pkexec or sudo)"; }
 need_user() { (( EUID != 0 )) || die "this step must run as the desktop user, not root"; }
 
-# Run a repo script as root. pkexec goes through the session's polkit agent
-# (the omarchy-shell dialog once the port is up); sudo is the fallback for a
-# terminal-only bootstrap, asking on that terminal. Either way the target user
-# is passed explicitly.
+# Run a repo script as root. On a terminal, sudo: its cached credential covers every
+# root script of the run with one password (dots setup keeps it alive). Without a
+# terminal, pkexec goes through the session's polkit agent (the omarchy-shell dialog).
+# Either way the target user is passed explicitly.
 run_root() {
   local script=$1
   shift
   if (( EUID == 0 )); then
     OMARCHY_USER=$OMARCHY_USER "$script" "$@"
-  elif [[ -n ${WAYLAND_DISPLAY:-}${DISPLAY:-} ]] && command -v pkexec >/dev/null && [[ ${OMARCHY_ROOT_VIA:-pkexec} == pkexec ]]; then
+  elif [[ ! -t 0 && -n ${WAYLAND_DISPLAY:-}${DISPLAY:-} ]] && command -v pkexec >/dev/null && [[ ${OMARCHY_ROOT_VIA:-pkexec} == pkexec ]]; then
     pkexec env OMARCHY_USER="$OMARCHY_USER" REPO_DIR="$REPO_DIR" "$script" "$@"
   else
     sudo env OMARCHY_USER="$OMARCHY_USER" REPO_DIR="$REPO_DIR" "$script" "$@"
