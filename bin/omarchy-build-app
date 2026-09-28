@@ -125,8 +125,9 @@ ensure_layer_shell_qt() {
   ensure_ecm
   log "layer-shell-qt $LAYER_SHELL_QT_VERSION (into $QT_DIR)"
   git_checkout "$SRC_DIR/layer-shell-qt" https://github.com/KDE/layer-shell-qt "$LAYER_SHELL_QT_VERSION"
+  # KDE's install dirs would pick Debian's lib/x86_64-linux-gnu; the Qt tree keeps lib/.
   cmake_build "$SRC_DIR/layer-shell-qt" "$SRC_DIR/layer-shell-qt/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF \
-    -DCMAKE_CXX_FLAGS="-I$(wayland_compat)"
+    -DKDE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_CXX_FLAGS="-I$(wayland_compat)"
   cmake --install "$SRC_DIR/layer-shell-qt/build" >/dev/null
   [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake ]] || die "layer-shell-qt did not install into $QT_DIR"
 }
