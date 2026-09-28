@@ -80,7 +80,15 @@ log "the rest of Omarchy's skel: wireplumber, xournalpp, fcitx environment, font
 [[ -d $cfg/wireplumber/wireplumber.conf.d ]] || cp -a "$OMARCHY_PATH/config/wireplumber" "$cfg/wireplumber"
 [[ -d $cfg/xournalpp ]] || cp -a "$OMARCHY_PATH/config/xournalpp" "$cfg/xournalpp"
 install -Dm644 "$OMARCHY_PATH/default/environment.d/10-omarchy-fcitx.conf" "$cfg/environment.d/10-omarchy-fcitx.conf"
-install -Dm644 "$OMARCHY_PATH/default/fontconfig/conf.avail/50-omarchy.conf" "$cfg/fontconfig/conf.d/50-omarchy.conf"
+# Upstream puts 50-omarchy.conf in the system conf.d; here it goes to the user's, and noble's
+# fontconfig 2.15 then applies its strong assign of monospace before the prepend_first that
+# omarchy-font-set writes to fonts.conf, whose test no longer matches: the chosen font never
+# wins. The assign block stays out and font-set owns the monospace default instead.
+mkdir -p "$cfg/fontconfig/conf.d"
+awk '/<match/ { buf = $0; inblk = 1; next }
+     inblk { buf = buf "\n" $0; if (/<\/match>/) { inblk = 0; if (!(buf ~ /<string>monospace<\/string>/ && buf ~ /mode="assign"/)) print buf }; next }
+     { print }' "$OMARCHY_PATH/default/fontconfig/conf.avail/50-omarchy.conf" >"$cfg/fontconfig/conf.d/50-omarchy.conf"
+[[ -f $cfg/fontconfig/fonts.conf ]] || omarchy-font-set "JetBrainsMono Nerd Font" >/dev/null 2>&1 || true
 fc-cache -f >/dev/null 2>&1 || true
 if [[ ! -f $OMARCHY_HOME/.gnupg/dirmngr.conf ]]; then
   mkdir -p "$OMARCHY_HOME/.gnupg" && chmod 700 "$OMARCHY_HOME/.gnupg"
