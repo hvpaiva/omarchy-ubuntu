@@ -74,7 +74,26 @@ cmake_build() { # cmake_build <source dir> <build dir> <extra cmake args...>
     -DCMAKE_PREFIX_PATH="$QT_DIR" \
     -DCMAKE_INSTALL_RPATH="$QT_DIR/lib" \
     "$@" >/dev/null
-  cmake --build "$build" --parallel "$JOBS" 2>&1 | grep -iE "error" | head -5 || true
+  cmake --build "$build" --parallel "$JOBS" >"$build/build.log" 2>&1 || {
+    grep -iE "error" "$build/build.log" | head -5 >&2
+    die "build failed, full log in $build/build.log"
+  }
+}
+
+# Qt >= 6.10's private qwayland-wayland.h wants wl_fixes from libwayland >= 1.23;
+# noble ships 1.22. 40-quickshell.sh generates a newer client header that
+# shadows the system one at compile time; anything built against Qt's private
+# Wayland headers needs the same include.
+wayland_compat() {
+  local compat=$SRC_DIR/quickshell-compat/include
+  if [[ ! -f $compat/wayland-client-protocol.h ]]; then
+    mkdir -p "$compat"
+    curl -fsSL -o "$SRC_DIR/quickshell-compat/wayland-$WAYLAND_XML_VERSION.xml" \
+      "https://gitlab.freedesktop.org/wayland/wayland/-/raw/$WAYLAND_XML_VERSION/protocol/wayland.xml"
+    wayland-scanner client-header "$SRC_DIR/quickshell-compat/wayland-$WAYLAND_XML_VERSION.xml" "$compat/wayland-client-protocol.h"
+    cp /usr/include/wayland-client.h "$compat/wayland-client.h"
+  fi
+  echo "$compat"
 }
 
 # ECM and layer-shell-qt go into the Qt tree itself: that is the prefix every
@@ -106,7 +125,8 @@ ensure_layer_shell_qt() {
   ensure_ecm
   log "layer-shell-qt $LAYER_SHELL_QT_VERSION (into $QT_DIR)"
   git_checkout "$SRC_DIR/layer-shell-qt" https://github.com/KDE/layer-shell-qt "$LAYER_SHELL_QT_VERSION"
-  cmake_build "$SRC_DIR/layer-shell-qt" "$SRC_DIR/layer-shell-qt/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF
+  cmake_build "$SRC_DIR/layer-shell-qt" "$SRC_DIR/layer-shell-qt/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF \
+    -DCMAKE_CXX_FLAGS="-I$(wayland_compat)"
   cmake --install "$SRC_DIR/layer-shell-qt/build" >/dev/null
   [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake ]] || die "layer-shell-qt did not install into $QT_DIR"
 }
@@ -126,8 +146,10 @@ build_qmake() {
   local app=$1 dir
   dir=$(src_of "$app")
   mkdir -p "$dir/build"
-  (cd "$dir/build" && "$QT_DIR/bin/qmake6" "../$app.pro" >/dev/null && make -j"$JOBS" 2>&1 | grep -iE "error" | head -5 || true)
-  [[ -x $dir/build/$app ]] || die "$app: no binary produced"
+  (cd "$dir/build" && "$QT_DIR/bin/qmake6" "../$app.pro" >/dev/null && make -j"$JOBS" >build.log 2>&1) || {
+    grep -iE "error" "$dir/build/build.log" | head -5 >&2
+    die "$app: build failed, full log in $dir/build/build.log"
+  }
   # qmake adds an RPATH to the Qt lib dir for non-system Qt installs; keep it honest.
   readelf -d "$dir/build/$app" | grep -q "$QT_DIR/lib" || warn "$app has no RPATH to $QT_DIR/lib"
   install -m 0755 "$dir/build/$app" "$LOCAL_BIN/$app"
@@ -147,7 +169,10 @@ build_owe() {
   local dir
   dir=$(src_of owe)
   [[ -d $dir/build ]] || meson setup "$dir/build" "$dir" --prefix="$OMARCHY_HOME/.local" --buildtype=release >/dev/null
-  ninja -C "$dir/build" 2>&1 | grep -iE "error" | head -5 || true
+  ninja -C "$dir/build" >"$dir/build/build.log" 2>&1 || {
+    grep -iE "error" "$dir/build/build.log" | head -5 >&2
+    die "owe: build failed, full log in $dir/build/build.log"
+  }
   ninja -C "$dir/build" install >/dev/null
   [[ -x $LOCAL_BIN/owed ]] || die "owe: no owed produced"
   # The package puts these under /usr; here they follow the ~/.local prefix. The
