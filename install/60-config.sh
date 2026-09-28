@@ -44,13 +44,12 @@ for d in hooks extensions; do
   [[ -d $cfg/omarchy/$d ]] || cp -a "$OMARCHY_PATH/config/omarchy/$d" "$cfg/omarchy/$d" 2>/dev/null || true
 done
 
-log "terminal configs (Omarchy's; yours are backed up once)"
+# Only where nothing is there yet: a config that exists is the user's, whatever put it
+# there, and a re-run must not swap it for the template (the backup's presence was the
+# old marker; once the backup is cleaned up the swap happened again).
+log "terminal configs (Omarchy's, where none exists)"
 for term in alacritty ghostty foot kitty; do
   [[ -d $OMARCHY_PATH/config/$term ]] || continue
-  if [[ -e $cfg/$term && ! -e $cfg/$term.bak-omarchy ]]; then
-    mv "$cfg/$term" "$cfg/$term.bak-omarchy"
-    note "backup    $cfg/$term.bak-omarchy"
-  fi
   [[ -e $cfg/$term ]] || cp -a "$OMARCHY_PATH/config/$term" "$cfg/$term"
 done
 [[ -f $cfg/xdg-terminals.list ]] || printf 'com.mitchellh.ghostty.desktop\n' >"$cfg/xdg-terminals.list"

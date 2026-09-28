@@ -27,7 +27,8 @@ fc-cache -f "$fonts" >/dev/null
 # file. The block goes at the very top, before the interactive guard.
 begin='# >>> omarchy-ubuntu env-bootstrap >>>'
 end='# <<< omarchy-ubuntu env-bootstrap <<<'
-if ! grep -qF "$begin" "$OMARCHY_HOME/.bashrc"; then
+# skipped when ~/.bashrc already sources env-bootstrap on its own (a dotfiles bashrc does)
+if ! grep -qF "$begin" "$OMARCHY_HOME/.bashrc" && ! grep -qF 'default/bash/env-bootstrap' "$OMARCHY_HOME/.bashrc"; then
   log "env-bootstrap block in ~/.bashrc"
   backup_once "$OMARCHY_HOME/.bashrc"
   tmp=$(mktemp)
