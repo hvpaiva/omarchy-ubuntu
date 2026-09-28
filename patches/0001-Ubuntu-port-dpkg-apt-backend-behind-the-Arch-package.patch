@@ -1,4 +1,4 @@
-From 5725e8414e76028fd0fea12185b56225e3c123f0 Mon Sep 17 00:00:00 2001
+From 7e943b8c94e3042d80938f6694564c6a8073e1f8 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |   3 +
  bin/omarchy-pkg-present         |   3 +
  bin/omarchy-pkg-remove          |   3 +
- bin/omarchy-pkg-ubuntu          | 860 ++++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 884 ++++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |  15 +-
- 12 files changed, 924 insertions(+), 1 deletion(-)
+ 12 files changed, 948 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..ae8c8396
+index 00000000..845cc003
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,860 @@
+@@ -0,0 +1,884 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -256,6 +256,11 @@ index 00000000..ae8c8396
 +  [xpadneo-dkms]="opr xpadneo-dkms dkms"
 +  [moonlight-qt]="flatpak com.moonlight_stream.Moonlight"
 +  [zed]="custom zed"
++  [hype]="custom hype"
++  [monologue]="custom monologue"
++  [omasnap]="custom omasnap"
++  [owe]="custom owe"
++  [owe-lockfeed]="custom owe-lockfeed"
 +  [zen-browser-bin]="custom zen"
 +  [steam]="custom steam"
 +  [helix]="mise helix helix hx"
@@ -712,6 +717,25 @@ index 00000000..ae8c8396
 +  done
 +  return 0
 +}
++
++# Companion apps upstream ships as Arch packages: built from source against the
++# port's Qt by the port's omarchy-build-app (hype, monologue, omasnap, owe, owe-lockfeed).
++PORT_DIR=${OMARCHY_UBUNTU_DIR:-$HOME/.local/share/omarchy-ubuntu}
++
++port_app_installed() {
++  case $1 in
++  owe) [[ -x $HOME/.local/bin/owed ]] ;;
++  owe-lockfeed) compgen -G "$HOME/.local/opt/Qt/*/gcc_64/qml/Owe/LockFeed/qmldir" >/dev/null ;;
++  *) [[ -x $HOME/.local/bin/$1 ]] ;;
++  esac
++}
++
++for port_app in hype monologue omasnap owe owe-lockfeed; do
++  eval "install_custom_${port_app//-/_}() { \"\$PORT_DIR/bin/omarchy-build-app\" $port_app; }
++        installed_custom_${port_app//-/_}() { port_app_installed $port_app; }
++        remove_custom_${port_app//-/_}() { \"\$PORT_DIR/bin/omarchy-build-app\" --remove $port_app; }"
++done
++unset port_app
 +
 +install_custom_zed() {
 +  curl -fsSL https://zed.dev/install.sh | sh

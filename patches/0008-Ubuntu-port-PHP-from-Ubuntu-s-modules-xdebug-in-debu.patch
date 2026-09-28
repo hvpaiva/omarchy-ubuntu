@@ -1,4 +1,4 @@
-From a6ba75f623dc17a0d3795593ebc602f8366ecdbe Mon Sep 17 00:00:00 2001
+From f53e27cf3a5d1ba4396b2100229b3d00ed2893a8 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Wed, 23 Sep 2026 11:50:14 -0300
 Subject: [PATCH 08/12] Ubuntu port: PHP from Ubuntu's modules, xdebug in debug

@@ -1,0 +1,202 @@
+#!/bin/bash
+# Build Omarchy's companion apps from source against the port's Qt, into ~/.local.
+# Upstream ships them as Arch packages; on Ubuntu omarchy-pkg-ubuntu's recipes
+# call this, so `omarchy-pkg-add hype` and the migrations that install them work.
+#
+#   omarchy-build-app <app>...           omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed
+#   omarchy-build-app --remove <app>...
+#
+# qmake apps: the Qt Quick ones. omasnap: cmake, needs layer-shell-qt (built here
+# too, with ECM, into the Qt tree). owe: meson, no Qt; its daemon's user unit
+# already points at ~/.local/bin. owe-lockfeed: the QML plugin from owe's
+# repository, into the Qt tree's qml/ so Quickshell can import it.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
+need_user
+
+export PATH="$QT_DIR/bin:$PATH"
+APPS_DIR=$OMARCHY_HOME/.local/share/applications
+ICONS_DIR=$OMARCHY_HOME/.local/share/icons/hicolor/scalable/apps
+mkdir -p "$LOCAL_BIN" "$APPS_DIR" "$ICONS_DIR" "$SRC_DIR"
+
+version_of() {
+  case $1 in
+    omacalc) echo "$OMACALC_VERSION" ;;
+    omawrite) echo "$OMAWRITE_VERSION" ;;
+    omacut) echo "$OMACUT_VERSION" ;;
+    hype) echo "$HYPE_VERSION" ;;
+    monologue) echo "$MONOLOGUE_VERSION" ;;
+    omasnap) echo "$OMASNAP_VERSION" ;;
+    owe | owe-lockfeed) echo "$OWE_VERSION" ;;
+    *) die "unknown app: $1" ;;
+  esac
+}
+
+repo_of() {
+  case $1 in
+    omacalc | omawrite | omacut) echo "https://github.com/omacom-io/$1" ;;
+    owe-lockfeed) echo "https://github.com/omacom/owe" ;;
+    *) echo "https://github.com/omacom/$1" ;;
+  esac
+}
+
+src_of() {
+  case $1 in
+    owe-lockfeed) echo "$SRC_DIR/owe" ;;
+    *) echo "$SRC_DIR/$1" ;;
+  esac
+}
+
+# What marks the app as installed, for the recipe and for the up-to-date check.
+marker_of() {
+  case $1 in
+    owe) echo "$LOCAL_BIN/owed" ;;
+    owe-lockfeed) echo "$QT_DIR/qml/Owe/LockFeed/qmldir" ;;
+    *) echo "$LOCAL_BIN/$1" ;;
+  esac
+}
+
+up_to_date() {
+  local app=$1 tag
+  tag=$(version_of "$app")
+  [[ -e $(marker_of "$app") ]] && git -C "$(src_of "$app")" describe --tags 2>/dev/null | grep -q "$tag"
+}
+
+checkout() {
+  local app=$1
+  git_checkout "$(src_of "$app")" "$(repo_of "$app")" "$(version_of "$app")"
+}
+
+cmake_build() { # cmake_build <source dir> <build dir> <extra cmake args...>
+  local src=$1 build=$2
+  shift 2
+  cmake -S "$src" -B "$build" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_PREFIX_PATH="$QT_DIR" \
+    -DCMAKE_INSTALL_RPATH="$QT_DIR/lib" \
+    "$@" >/dev/null
+  cmake --build "$build" --parallel "$JOBS" 2>&1 | grep -iE "error" | head -5 || true
+}
+
+# ECM and layer-shell-qt go into the Qt tree itself: that is the prefix every
+# cmake call here searches, and KDE's install dirs then follow Qt's layout
+# (the shell-integration plugin lands in plugins/wayland-shell-integration).
+ensure_ecm() {
+  [[ -f $QT_DIR/share/ECM/cmake/ECMConfig.cmake ]] && return 0
+  log "extra-cmake-modules $ECM_VERSION (into $QT_DIR)"
+  git_checkout "$SRC_DIR/extra-cmake-modules" https://github.com/KDE/extra-cmake-modules "$ECM_VERSION"
+  cmake_build "$SRC_DIR/extra-cmake-modules" "$SRC_DIR/extra-cmake-modules/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF -DBUILD_HTML_DOCS=OFF -DBUILD_MAN_DOCS=OFF -DBUILD_QTHELP_DOCS=OFF
+  cmake --install "$SRC_DIR/extra-cmake-modules/build" >/dev/null
+}
+
+ensure_layer_shell_qt() {
+  [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake ]] && return 0
+  ensure_ecm
+  log "layer-shell-qt $LAYER_SHELL_QT_VERSION (into $QT_DIR)"
+  git_checkout "$SRC_DIR/layer-shell-qt" https://github.com/KDE/layer-shell-qt "$LAYER_SHELL_QT_VERSION"
+  cmake_build "$SRC_DIR/layer-shell-qt" "$SRC_DIR/layer-shell-qt/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF
+  cmake --install "$SRC_DIR/layer-shell-qt/build" >/dev/null
+  [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake ]] || die "layer-shell-qt did not install into $QT_DIR"
+}
+
+install_desktop_entry() { # from the app's pkgbuild/ (upstream's package files), or the repo's applications/
+  local app=$1 dir=$2
+  if [[ -f $dir/pkgbuild/$app.desktop ]]; then
+    sed 's|^Exec=/usr/bin/|Exec=|' "$dir/pkgbuild/$app.desktop" >"$APPS_DIR/$app.desktop"
+    install -m 0644 "$dir/pkgbuild/$app.svg" "$ICONS_DIR/$app.svg"
+  elif [[ -f $REPO_DIR/applications/$app.desktop ]]; then
+    install -m 0644 "$REPO_DIR/applications/$app.desktop" "$APPS_DIR/$app.desktop"
+    install -m 0644 "$REPO_DIR/applications/$app.svg" "$ICONS_DIR/$app.svg"
+  fi
+}
+
+build_qmake() {
+  local app=$1 dir
+  dir=$(src_of "$app")
+  mkdir -p "$dir/build"
+  (cd "$dir/build" && "$QT_DIR/bin/qmake6" "../$app.pro" >/dev/null && make -j"$JOBS" 2>&1 | grep -iE "error" | head -5 || true)
+  [[ -x $dir/build/$app ]] || die "$app: no binary produced"
+  # qmake adds an RPATH to the Qt lib dir for non-system Qt installs; keep it honest.
+  readelf -d "$dir/build/$app" | grep -q "$QT_DIR/lib" || warn "$app has no RPATH to $QT_DIR/lib"
+  install -m 0755 "$dir/build/$app" "$LOCAL_BIN/$app"
+  install_desktop_entry "$app" "$dir"
+}
+
+build_omasnap() {
+  local dir
+  dir=$(src_of omasnap)
+  ensure_layer_shell_qt
+  cmake_build "$dir" "$dir/build" -DCMAKE_INSTALL_PREFIX="$OMARCHY_HOME/.local"
+  [[ -x $dir/build/omasnap ]] || die "omasnap: no binary produced"
+  cmake --install "$dir/build" >/dev/null
+}
+
+build_owe() {
+  local dir
+  dir=$(src_of owe)
+  [[ -d $dir/build ]] || meson setup "$dir/build" "$dir" --prefix="$OMARCHY_HOME/.local" --buildtype=release >/dev/null
+  ninja -C "$dir/build" 2>&1 | grep -iE "error" | head -5 || true
+  ninja -C "$dir/build" install >/dev/null
+  [[ -x $LOCAL_BIN/owed ]] || die "owe: no owed produced"
+  # The package puts these under /usr; here they follow the ~/.local prefix. The
+  # unit already starts %h/.local/bin/owed.
+  install -Dm755 "$dir/hooks/owe-idle" "$LOCAL_BIN/owe-idle"
+  install -Dm644 "$dir/hooks/theme-set.d/10-owe-sync" "$OMARCHY_HOME/.local/share/owe/10-owe-sync"
+  install -Dm644 "$dir/config/config.toml" "$OMARCHY_HOME/.local/share/doc/owe/config.toml.example"
+  install -Dm644 "$dir/systemd/owed.service" "$OMARCHY_HOME/.config/systemd/user/owed.service"
+  systemctl --user daemon-reload 2>/dev/null || true
+}
+
+build_owe_lockfeed() {
+  local dir staging
+  dir=$(src_of owe-lockfeed)
+  staging=$dir/build-lockfeed/staging
+  cmake_build "$dir/qml-plugin" "$dir/build-lockfeed" -DCMAKE_INSTALL_PREFIX="$staging" -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_TESTING=OFF
+  rm -rf "$staging" && cmake --install "$dir/build-lockfeed" >/dev/null
+  [[ -f $staging/lib/qt6/qml/Owe/LockFeed/qmldir ]] || die "owe-lockfeed: no QML module produced"
+  rm -rf "$QT_DIR/qml/Owe" && cp -a "$staging/lib/qt6/qml/Owe" "$QT_DIR/qml/Owe"
+}
+
+build_one() {
+  local app=$1 tag
+  tag=$(version_of "$app")
+  if up_to_date "$app"; then
+    note "unchanged $app $tag"
+    return
+  fi
+  log "$app $tag"
+  checkout "$app"
+  case $app in
+    omacalc | omawrite | omacut | hype | monologue) build_qmake "$app" ;;
+    omasnap) build_omasnap ;;
+    owe) build_owe ;;
+    owe-lockfeed) build_owe_lockfeed ;;
+  esac
+  note "installed $(marker_of "$app")"
+}
+
+remove_one() {
+  local app=$1
+  case $app in
+    owe)
+      systemctl --user disable --now owed.service 2>/dev/null || true
+      rm -f "$LOCAL_BIN/owed" "$LOCAL_BIN/owe" "$LOCAL_BIN/owe-idle" "$OMARCHY_HOME/.config/systemd/user/owed.service"
+      rm -rf "$OMARCHY_HOME/.local/share/owe" "$OMARCHY_HOME/.local/share/doc/owe"
+      ;;
+    owe-lockfeed) rm -rf "$QT_DIR/qml/Owe" ;;
+    *) rm -f "$LOCAL_BIN/$app" "$APPS_DIR/$app.desktop" "$ICONS_DIR/$app.svg" ;;
+  esac
+  note "removed $app"
+}
+
+action=build
+if [[ ${1:-} == --remove ]]; then
+  action=remove
+  shift
+fi
+apps=("$@")
+(( ${#apps[@]} > 0 )) || die "which app? omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed"
+for app in "${apps[@]}"; do
+  version_of "$app" >/dev/null
+  if [[ $action == remove ]]; then remove_one "$app"; else build_one "$app"; fi
+done
+update-desktop-database "$APPS_DIR" 2>/dev/null || true
