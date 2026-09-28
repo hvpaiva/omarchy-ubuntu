@@ -72,9 +72,9 @@ git_checkout() {
   local dir=$1 url=$2 ref=$3
   if [[ -d $dir/.git ]]; then
     git -C "$dir" fetch --quiet --depth 1 origin "$ref" 2>/dev/null || git -C "$dir" fetch --quiet --tags origin
-    git -C "$dir" checkout --quiet "$ref" 2>/dev/null || git -C "$dir" checkout --quiet FETCH_HEAD
+    git -C "$dir" -c advice.detachedHead=false checkout --quiet "$ref" 2>/dev/null || git -C "$dir" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
   else
-    git clone --quiet --depth 1 --branch "$ref" "$url" "$dir"
+    git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$ref" "$url" "$dir"
   fi
 }
 
