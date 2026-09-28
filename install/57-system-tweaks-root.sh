@@ -33,10 +33,42 @@ upstream_files=(
   etc/mise/conf.d/omarchy.toml
   bin/omarchy-dns
 )
-if [[ ${1:-} == --manifest ]]; then
-  (cd "$OMARCHY_PATH" && sha256sum "${upstream_files[@]}")
-  exit 0
-fi
+# Upstream etc/ files this step leaves alone, each with its reason. Anything
+# under etc/ that is in neither list is new upstream and nobody decided yet:
+# `--unhandled` prints those, for omarchy-update-ubuntu and omarchy-upstream-check.
+skipped_files=(
+  etc/cups/cups-browsed.conf                              # 58: appended to Ubuntu's own
+  etc/cups/cups-files.conf                                # 58: Ubuntu's, with the SystemGroup edit
+  etc/docker/daemon.json                                  # 58: merged into the existing file
+  etc/gnupg/dirmngr.conf                                  # Arch's keyserver setup for pacman-key
+  etc/limine-entry-tool.d/omarchy-defaults.conf           # Arch boot stack
+  etc/limine-entry-tool.d/omarchy-uki.conf                # Arch boot stack
+  etc/mkinitcpio.conf.d/omarchy_hooks.conf                # Arch boot stack
+  etc/mkinitcpio.conf.d/thunderbolt_module.conf           # Arch boot stack
+  etc/nsswitch.conf                                       # Ubuntu's carries sss for the corporate login
+  etc/plymouth/plymouthd.conf                             # 59 sets the theme through update-alternatives
+  etc/profile.d/omarchy.sh                                # 55 writes the dev-link version
+  etc/sddm.conf.d/10-theme.conf                           # GDM
+  etc/sddm.conf.d/10-wayland.conf                         # GDM
+  etc/security/faillock.conf                              # no faillock in Ubuntu's PAM
+  etc/sudoers.d/omarchy-theme-browser                     # 70-browser-policy-root.sh
+  etc/systemd/resolved.conf.d/20-docker-dns.conf          # 58
+  etc/systemd/system/cups-browsed.service.d/10-omarchy.conf # 58
+  etc/systemd/system/docker.service.d/no-block-boot.conf  # 58
+  etc/sysusers.d/omarchy-cups-browsed.conf                # 58
+  etc/tmpfiles.d/omarchy-zswap.conf                       # 58: zram instead
+)
+case ${1:-} in
+  --manifest)
+    (cd "$OMARCHY_PATH" && sha256sum "${upstream_files[@]}")
+    exit 0
+    ;;
+  --unhandled)
+    (cd "$OMARCHY_PATH" && find etc -type f | sort) |
+      grep -vxF -f <(printf '%s\n' "${upstream_files[@]}" "${skipped_files[@]}")
+    exit 0
+    ;;
+esac
 need_root
 
 from_upstream() { install_file "$1" "/$2" <"$OMARCHY_PATH/$2"; }

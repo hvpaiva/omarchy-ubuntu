@@ -35,13 +35,14 @@ done
 log "Omarchy user units (ExecStart rewritten to the checkout)"
 # WantedBy=graphical-session.target: pulled in by the uwsm session; the direct
 # GDM entry never activates that target, so autostart.lua also starts them.
-units="bt-agent.service omarchy-sleep-lock.service omarchy-crash-watch.service omarchy-recover-internal-monitor.service omarchy-tailscale-receive.service omarchy-migrate-notify.service omarchy-fcitx5.service"
-for u in $units; do
+# Every upstream unit is installed (lib/units.sh); the ones enabled are upstream's
+# first-run list (install/user/first-run/enable-user-units.sh) plus Taildrop.
+while IFS= read -r u; do
   rewrite_unit "$units_src/$u" "$units_dst/$u"
-done
+done < <(omarchy_units "$units_src")
 systemctl --user daemon-reload
-# shellcheck disable=SC2086
-systemctl --user enable $units >/dev/null 2>&1
+systemctl --user enable bt-agent.service omarchy-recover-internal-monitor.service omarchy-sleep-lock.service \
+  omarchy-migrate-notify.service omarchy-fcitx5.service omarchy-crash-watch.service omarchy-tailscale-receive.service >/dev/null 2>&1
 
 log "migrations: mark everything shipped with this tag as done (a fresh install's state)"
 # Otherwise omarchy-migrate would run every migration ever shipped, several of

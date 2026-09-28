@@ -1,0 +1,74 @@
+name: upstream
+
+# What the next Omarchy brings for the port. Weekly, and on demand. The report
+# goes to an issue: one per release tag the port is not on yet, and a rolling
+# one for upstream's default branch while the port is on the newest tag.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Upstream ref to compare with (empty: newest tag, or the default branch when already on it)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone upstream
+        run: |
+          source versions.env
+          git clone --quiet --filter=blob:none "$OMARCHY_REPO" "$RUNNER_TEMP/omarchy"
+          git -C "$RUNNER_TEMP/omarchy" fetch --quiet --tags origin
+          newest=$(git -C "$RUNNER_TEMP/omarchy" tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -n1)
+          echo "pinned=$OMARCHY_TAG" >>"$GITHUB_ENV"
+          echo "newest=$newest" >>"$GITHUB_ENV"
+
+      - name: Report
+        id: report
+        run: |
+          set +e
+          target=${{ github.event.inputs.target }}
+          if [[ -n $target ]]; then
+            args=(--target "$target"); title="Upstream $target: what changed for the port"
+          elif [[ $newest != "$pinned" ]]; then
+            args=(--target "$newest"); title="Upstream $newest: what changed for the port"
+          else
+            args=(--branch); title="Upstream preview: the default branch after $pinned"
+          fi
+          bin/omarchy-upstream-check --repo "$RUNNER_TEMP/omarchy" "${args[@]}" >report.md
+          echo "status=$?" >>"$GITHUB_OUTPUT"
+          echo "title=$title" >>"$GITHUB_OUTPUT"
+          cat report.md
+
+      - name: Post or update the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title='${{ steps.report.outputs.title }}'
+          {
+            cat report.md
+            echo
+            echo "_Run ${{ github.run_id }} of ${{ github.workflow }}, $(date -u +%F)._"
+          } >body.md
+          number=$(gh issue list --state open --search "in:title \"$title\"" --json number,title \
+            --jq ".[] | select(.title == \"$title\") | .number" | head -n1)
+          if [[ -n $number ]]; then
+            gh issue edit "$number" --body-file body.md
+          else
+            gh label create upstream --description "what the next Omarchy brings for the port" --color 0e8a16 --force
+            gh issue create --title "$title" --body-file body.md --label upstream
+          fi
+
+      - name: Attention needed
+        if: steps.report.outputs.status != '0'
+        run: echo "::warning::the report has a rebase conflict or a package without an Ubuntu source"

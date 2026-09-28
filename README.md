@@ -76,16 +76,46 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `patches/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (dpkg guards, apt helpers, update hand-off, logout without uwsm) |
 | `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; `monitors.lua.example` |
 | `etc/` | PAM stacks (lock, polkit with fingerprint), polkit rule, wayland session entry |
-| `bin/` | `omarchy-update-ubuntu`, `omarchy-build-qt-apps`, `omarchy-keyring-passwordless` |
+| `bin/` | `omarchy-update-ubuntu`, `omarchy-upstream-check`, `omarchy-build-qt-apps`, `omarchy-keyring-passwordless` |
+| `.github/workflows/upstream.yml` | weekly report of what the next Omarchy brings for the port, posted as an issue |
 | `docs/` | deviations from upstream and the gotchas found while porting |
 
 ## Updating
 
 `omarchy-update-ubuntu` fetches the newest upstream tag, rebases the `ubuntu`
 branch on it, runs the new migrations (Arch-only ones become a question),
-reapplies the root-side pieces if upstream changed them and restarts the shell.
+reapplies the root-side pieces if upstream changed them, installs every user
+unit upstream ships (minus `lib/units.sh`'s skip list) and restarts the shell.
 Bump `versions.env` and rerun the matching `bootstrap.sh` step when Omarchy
 raises its Quickshell or app requirements.
+
+## Following upstream
+
+Omarchy tags a release every week or two and lands dozens of commits a day
+in between. The git rebase covers the checkout; what the port reproduces by
+hand outside it (package lists, `etc/`, install steps, user units) would
+drift in silence. `omarchy-upstream-check` reads what the next tag brings
+before anything is touched:
+
+```
+omarchy-upstream-check                    # pinned tag -> newest release tag
+omarchy-upstream-check --branch           # pinned tag -> upstream's default branch
+omarchy-upstream-check --base v4.0.3 --target v4.0.4
+```
+
+It works on a throwaway clone and reports, in Markdown: whether the port's
+patches rebase cleanly (and on which files they conflict), each package added
+or removed upstream with the Ubuntu source the port knows for it, the new
+migrations and whether they use Arch tooling, every change in the directories
+the port mirrors by hand, the `etc/` files step 57 neither installs nor lists
+as skipped, and the new user units. It exits 1 on a conflict or on a package
+without an Ubuntu source, 0 otherwise.
+
+The `upstream` workflow runs it every Monday (and on demand, with a ref of
+your choice) and keeps the result in an issue: one per release tag the port
+is not on yet, and a rolling preview of the default branch while the port is
+on the newest tag. `omarchy-update-ubuntu` prints the command for the tag it
+is about to apply.
 
 ## Status
 
