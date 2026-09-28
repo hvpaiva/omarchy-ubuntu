@@ -33,6 +33,7 @@ Everything not listed here is upstream's own code and configuration, unchanged.
 | Not ported | mkinitcpio, limine, sddm, faillock, nsswitch, ufw-docker | left to Ubuntu | Arch boot stack, no faillock in Ubuntu's PAM, `nsswitch` carries `sss` for the corporate login |
 | Global user units | Arch enables none | `foot-server`, `fumon` and `hyprsunset` globally disabled | Ubuntu's presets enable them for every session; Omarchy starts hyprsunset from the nightlight toggle only |
 | Fontconfig defaults | `50-omarchy.conf` in `/etc/fonts/conf.d` | same file in `~/.config/fontconfig/conf.d` minus its `monospace` assign; `omarchy-font-set` writes the monospace default to `fonts.conf` at install | noble's fontconfig 2.15 applies the strong assign before font-set's `prepend_first`, whose `monospace` test then never matches, so a chosen font never took effect |
+| Bash: fzf | `default/bash/init` sources `/usr/share/fzf/{completion,key-bindings}.bash` | fork patch 0014 also looks in `/usr/share/doc/fzf/examples`, where Ubuntu's package keeps `key-bindings.bash` (completion comes through bash-completion) | different install paths |
 
 ## Files this port writes into `$HOME`
 
