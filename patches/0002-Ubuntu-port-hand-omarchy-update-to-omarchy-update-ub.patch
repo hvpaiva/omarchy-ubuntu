@@ -1,4 +1,4 @@
-From 3856c47e93adfe22fbbcd4b832931a12a96f79fd Mon Sep 17 00:00:00 2001
+From e98cc2b54b07eeb7b62875bc6b283fa690463397 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 20:30:18 -0300
 Subject: [PATCH 02/12] Ubuntu port: hand omarchy-update to

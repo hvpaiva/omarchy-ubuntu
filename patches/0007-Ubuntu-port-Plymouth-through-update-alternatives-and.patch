@@ -1,4 +1,4 @@
-From 0ecffef37f39988d66608cfdaf3e16cb764eb54e Mon Sep 17 00:00:00 2001
+From 784ba5c26c30d859b2e046ac1074784ac19eddc7 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Wed, 23 Sep 2026 09:38:38 -0300
 Subject: [PATCH 07/12] Ubuntu port: Plymouth through update-alternatives and

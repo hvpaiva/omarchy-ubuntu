@@ -68,3 +68,11 @@ libgtk-3-dev
 # hyprpicker
 libhyprutils-dev
 hyprwayland-scanner
+
+# Companion apps built on demand by omarchy-build-app (hype, monologue, omasnap, owe)
+libsource-highlight-dev
+libwebp-dev
+libmpv-dev
+libegl-dev
+libgles-dev
+libsystemd-dev
