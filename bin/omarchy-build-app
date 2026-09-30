@@ -13,7 +13,7 @@
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/common.sh"
 need_user
 
-export PATH="$QT_DIR/bin:$OMARCHY_HOME/.local/share/mise/shims:$PATH"
+export PATH="$QT_DIR/bin:$PATH"
 APPS_DIR=$OMARCHY_HOME/.local/share/applications
 ICONS_DIR=$OMARCHY_HOME/.local/share/icons/hicolor/scalable/apps
 mkdir -p "$LOCAL_BIN" "$APPS_DIR" "$ICONS_DIR" "$SRC_DIR"
@@ -106,9 +106,12 @@ ensure_cmake() {
   have=$(cmake --version 2>/dev/null | awk 'NR == 1 { print $3 }')
   [[ $(printf '%s\n' 3.29 "$have" | sort -V | head -n1) == 3.29 ]] && return 0
   log "cmake $CMAKE_VERSION (mise; apt's $have is older than ECM's 3.29)"
-  mise use --global "cmake@$CMAKE_VERSION" >/dev/null
+  # Installed, not `mise use`d: the global mise config is the user's, and a
+  # build tool pinned there would follow them to every machine.
+  mise install -q "cmake@$CMAKE_VERSION" >/dev/null || die "mise could not install cmake $CMAKE_VERSION"
+  PATH="$(mise where "cmake@$CMAKE_VERSION")/bin:$PATH"
   hash -r
-  cmake --version | grep -q " $CMAKE_VERSION" || die "cmake $CMAKE_VERSION not first on PATH after mise use"
+  cmake --version | grep -q " $CMAKE_VERSION" || die "cmake $CMAKE_VERSION not first on PATH"
 }
 
 ensure_ecm() {
