@@ -152,7 +152,12 @@ log "app defaults: kitty, fastfetch, mise"
 from_upstream 644 etc/xdg/kitty/kitty.conf
 from_upstream 644 etc/fastfetch/config.jsonc
 from_upstream 644 etc/mise/conf.d/omarchy.toml
-install_file 644 /etc/mise/conf.d/omarchy-ubuntu.toml <"$REPO_DIR/etc/mise/conf.d/omarchy-ubuntu.toml"
+# The port's own tool versions, with herdr and cliamp from versions.env. System
+# level on purpose: the user's ~/.config/mise/config.toml overrides any of them.
+{
+  cat "$REPO_DIR/etc/mise/conf.d/omarchy-ubuntu.toml"
+  printf 'herdr = "%s"\ncliamp = "%s"\n' "${HERDR_VERSION#v}" "${CLIAMP_VERSION#v}"
+} | install_file 644 /etc/mise/conf.d/omarchy-ubuntu.toml
 
 log "icons: Yaru back/forward arrows, as upstream's theme-system step"
 mkdir -p /usr/share/icons/Yaru/scalable/actions
