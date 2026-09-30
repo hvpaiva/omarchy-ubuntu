@@ -3,3 +3,6 @@
 [tools]
 # Omarchy's tmux.conf sets extended-keys-format, which is tmux >= 3.5; apt has 3.4.
 tmux = "latest"
+# Toolchain for the source builds (aether's Wails CLI); step 25 installs it.
+go = "latest"
+# herdr and cliamp: appended by step 57 from versions.env.

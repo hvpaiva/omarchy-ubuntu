@@ -16,9 +16,13 @@ if ! have mise; then
 fi
 export PATH="$LOCAL_BIN:$OMARCHY_HOME/.local/share/mise/shims:$PATH"
 
+# Installed, not `mise use`d: ~/.config/mise/config.toml is the user's (their
+# dotfiles carry it between machines). Step 57 declares go in the port's
+# system-level mise config, which the user's own declaration overrides.
 if ! have go; then
   log "Go via mise"
-  mise use --global go@latest
+  mise install -q go@latest
+  PATH="$(mise where go@latest)/bin:$PATH"
 fi
 
 if ! have wails && [[ ! -x $(go env GOPATH)/bin/wails ]]; then
