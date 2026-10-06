@@ -1,4 +1,4 @@
-From 7e943b8c94e3042d80938f6694564c6a8073e1f8 Mon Sep 17 00:00:00 2001
+From bb97688fcc431166b88190ad5a3602fdabd9c8de Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |   3 +
  bin/omarchy-pkg-present         |   3 +
  bin/omarchy-pkg-remove          |   3 +
- bin/omarchy-pkg-ubuntu          | 884 ++++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 891 ++++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |  15 +-
- 12 files changed, 948 insertions(+), 1 deletion(-)
+ 12 files changed, 955 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..845cc003
+index 00000000..f66bc925
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,884 @@
+@@ -0,0 +1,891 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -228,10 +228,12 @@ index 00000000..845cc003
 +  [retroarch-assets-glui]="retroarch-assets"
 +  [retroarch-assets-ozone]="retroarch-assets"
 +  [retroarch-assets-xmb]="retroarch-assets"
++  [base-devel]="build-essential"
 +)
 +
 +declare -A RECIPES=(
 +  [dell-xps13-sidecar-amps]="skip Dell XPS 13 DX13260 amplifier enablement built for Arch's kernel and mkinitcpio"
++  [apple-bcm-firmware-fetcher]="skip T2 Mac Wi-Fi firmware from Omarchy's hardware steps, which the port does not run"
 +  [grok-bot]="pool grok-bot https://downloads.cursor.com/aptrepo grok-bot main"
 +  [openai-codex-desktop]="pool chatgpt https://persistent.oaistatic.com/codex-app-prod/linux/deb stable main"
 +  [perplexity]="pool perplexity https://packages.perplexity.ai/deb stable main"
@@ -261,6 +263,11 @@ index 00000000..845cc003
 +  [omasnap]="custom omasnap"
 +  [owe]="custom owe"
 +  [owe-lockfeed]="custom owe-lockfeed"
++  [qt6-base]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
++  [qt6-declarative]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
++  [qt6-multimedia]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
++  [qt6-svg]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
++  [qt6-wayland]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
 +  [zen-browser-bin]="custom zen"
 +  [steam]="custom steam"
 +  [helix]="mise helix helix hx"
