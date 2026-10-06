@@ -32,6 +32,7 @@ upstream_files=(
   etc/xdg/kitty/kitty.conf
   etc/fastfetch/config.jsonc
   etc/mise/conf.d/omarchy.toml
+  etc/mise/conf.d/omarchy-agent-accounts.toml
   bin/omarchy-dns
 )
 # Upstream etc/ files this step leaves alone, each with its reason. Anything
@@ -152,6 +153,9 @@ log "app defaults: kitty, fastfetch, mise"
 from_upstream 644 etc/xdg/kitty/kitty.conf
 from_upstream 644 etc/fastfetch/config.jsonc
 from_upstream 644 etc/mise/conf.d/omarchy.toml
+# Claude, Codex and Grok dispatch through omarchy-agent-account-exec, which the
+# same checkout's bin/ provides; mise builds the wrappers on its next reshim.
+from_upstream 644 etc/mise/conf.d/omarchy-agent-accounts.toml
 # The port's own tool versions, with herdr and cliamp from versions.env. System
 # level on purpose: the user's ~/.config/mise/config.toml overrides any of them.
 {
