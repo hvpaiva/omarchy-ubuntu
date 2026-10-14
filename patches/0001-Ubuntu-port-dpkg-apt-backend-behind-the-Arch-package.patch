@@ -1,4 +1,4 @@
-From bb97688fcc431166b88190ad5a3602fdabd9c8de Mon Sep 17 00:00:00 2001
+From 3d495d1ffe1a8ce3e819104fec21d491e03422b6 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |   3 +
  bin/omarchy-pkg-present         |   3 +
  bin/omarchy-pkg-remove          |   3 +
- bin/omarchy-pkg-ubuntu          | 891 ++++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 899 ++++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |  15 +-
- 12 files changed, 955 insertions(+), 1 deletion(-)
+ 12 files changed, 963 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..f66bc925
+index 00000000..11847a65
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,891 @@
+@@ -0,0 +1,899 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -234,6 +234,7 @@ index 00000000..f66bc925
 +declare -A RECIPES=(
 +  [dell-xps13-sidecar-amps]="skip Dell XPS 13 DX13260 amplifier enablement built for Arch's kernel and mkinitcpio"
 +  [apple-bcm-firmware-fetcher]="skip T2 Mac Wi-Fi firmware from Omarchy's hardware steps, which the port does not run"
++  [linux-firmware-cirrus-dx13260]="skip Dell XPS 13 DX13260 speaker firmware from Omarchy's hardware steps, which the port does not run"
 +  [grok-bot]="pool grok-bot https://downloads.cursor.com/aptrepo grok-bot main"
 +  [openai-codex-desktop]="pool chatgpt https://persistent.oaistatic.com/codex-app-prod/linux/deb stable main"
 +  [perplexity]="pool perplexity https://packages.perplexity.ai/deb stable main"
@@ -256,6 +257,9 @@ index 00000000..f66bc925
 +  [openclaw]="opr openclaw"
 +  [hermes-desktop]="opr hermes-desktop"
 +  [xpadneo-dkms]="opr xpadneo-dkms dkms"
++  [disktree-bin]="opr disktree-bin"
++  [gliff]="opr gliff"
++  [superwhisper-bin]="opr superwhisper-bin python3-gi gir1.2-gtk-4.0 gir1.2-atspi-2.0 gir1.2-gdkpixbuf-2.0 python3-fonttools"
 +  [moonlight-qt]="flatpak com.moonlight_stream.Moonlight"
 +  [zed]="custom zed"
 +  [hype]="custom hype"
@@ -263,6 +267,8 @@ index 00000000..f66bc925
 +  [omasnap]="custom omasnap"
 +  [owe]="custom owe"
 +  [owe-lockfeed]="custom owe-lockfeed"
++  [signed]="custom signed"
++  [omarchy-hyprland-titlebars]="custom omarchy-hyprland-titlebars"
 +  [qt6-base]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
 +  [qt6-declarative]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
 +  [qt6-multimedia]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
@@ -725,19 +731,21 @@ index 00000000..f66bc925
 +  return 0
 +}
 +
-+# Companion apps upstream ships as Arch packages: built from source against the
-+# port's Qt by the port's omarchy-build-app (hype, monologue, omasnap, owe, owe-lockfeed).
++# Companion apps upstream ships as Arch packages: built from source by the port's
++# omarchy-build-app (hype, monologue, omasnap, owe, owe-lockfeed, signed against the
++# port's Qt; omarchy-hyprland-titlebars against the PPA's Hyprland).
 +PORT_DIR=${OMARCHY_UBUNTU_DIR:-$HOME/.local/share/omarchy-ubuntu}
 +
 +port_app_installed() {
 +  case $1 in
 +  owe) [[ -x $HOME/.local/bin/owed ]] ;;
 +  owe-lockfeed) compgen -G "$HOME/.local/opt/Qt/*/gcc_64/qml/Owe/LockFeed/qmldir" >/dev/null ;;
++  omarchy-hyprland-titlebars) [[ -f /usr/lib/omarchy-hyprland-titlebars/titlebars.so ]] ;;
 +  *) [[ -x $HOME/.local/bin/$1 ]] ;;
 +  esac
 +}
 +
-+for port_app in hype monologue omasnap owe owe-lockfeed; do
++for port_app in hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
 +  eval "install_custom_${port_app//-/_}() { \"\$PORT_DIR/bin/omarchy-build-app\" $port_app; }
 +        installed_custom_${port_app//-/_}() { port_app_installed $port_app; }
 +        remove_custom_${port_app//-/_}() { \"\$PORT_DIR/bin/omarchy-build-app\" --remove $port_app; }"
@@ -1115,5 +1123,5 @@ index c6dc7ed3..d46c3ce1 100644
      + 'omarchy-pkg-missing() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 0; done; return 1; }\n'
      + 'omarchy-cmd-present() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0; }\n'
 -- 
-2.55.0
+2.43.0
 

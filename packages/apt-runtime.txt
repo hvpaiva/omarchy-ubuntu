@@ -37,6 +37,7 @@ wl-clipboard
 ddcutil
 wtype
 imagemagick
+ffmpeg
 libvips-tools
 tesseract-ocr
 tesseract-ocr-eng
@@ -75,6 +76,10 @@ fcitx5-frontend-gtk3
 fcitx5-frontend-gtk4
 fcitx5-frontend-qt5
 fcitx5-frontend-qt6
+fcitx5-mozc
+fcitx5-hangul
+fcitx5-chinese-addons
+fcitx5-chewing
 
 # Apps the default bindings reach for
 nautilus

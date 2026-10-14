@@ -3,7 +3,7 @@
 # Upstream ships them as Arch packages; on Ubuntu omarchy-pkg-ubuntu's recipes
 # call this, so `omarchy-pkg-add hype` and the migrations that install them work.
 #
-#   omarchy-build-app <app>...           omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed
+#   omarchy-build-app <app>...           omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars
 #   omarchy-build-app --remove <app>...
 #
 # qmake apps: the Qt Quick ones. omasnap: cmake, needs layer-shell-qt (built here
@@ -27,6 +27,8 @@ version_of() {
     monologue) echo "$MONOLOGUE_VERSION" ;;
     omasnap) echo "$OMASNAP_VERSION" ;;
     owe | owe-lockfeed) echo "$OWE_VERSION" ;;
+    signed) echo "$SIGNED_VERSION" ;;
+    omarchy-hyprland-titlebars) echo "$TITLEBARS_VERSION" ;;
     *) die "unknown app: $1" ;;
   esac
 }
@@ -51,14 +53,25 @@ marker_of() {
   case $1 in
     owe) echo "$LOCAL_BIN/owed" ;;
     owe-lockfeed) echo "$QT_DIR/qml/Owe/LockFeed/qmldir" ;;
+    omarchy-hyprland-titlebars) echo /usr/lib/omarchy-hyprland-titlebars/titlebars.so ;;
     *) echo "$LOCAL_BIN/$1" ;;
   esac
+}
+
+hyprland_version() {
+  pkg-config --modversion hyprland 2>/dev/null
+}
+
+hyprland_stamp() {
+  echo "$(src_of omarchy-hyprland-titlebars)/build/hyprland-version"
 }
 
 up_to_date() {
   local app=$1 tag
   tag=$(version_of "$app")
-  [[ -e $(marker_of "$app") ]] && git -C "$(src_of "$app")" describe --tags 2>/dev/null | grep -q "$tag"
+  [[ -e $(marker_of "$app") ]] || return 1
+  git -C "$(src_of "$app")" describe --tags 2>/dev/null | grep -q "$tag" || return 1
+  [[ $app != omarchy-hyprland-titlebars || $(cat "$(hyprland_stamp)" 2>/dev/null) == "$(hyprland_version)" ]]
 }
 
 checkout() {
@@ -148,9 +161,10 @@ install_desktop_entry() { # from the app's pkgbuild/ (upstream's package files),
 
 build_qmake() {
   local app=$1 dir
+  shift
   dir=$(src_of "$app")
   mkdir -p "$dir/build"
-  (cd "$dir/build" && "$QT_DIR/bin/qmake6" "../$app.pro" >/dev/null && make -j"$JOBS" >build.log 2>&1) || {
+  (cd "$dir/build" && "$QT_DIR/bin/qmake6" "$@" "../$app.pro" >/dev/null && make -j"$JOBS" >build.log 2>&1) || {
     grep -iE "error" "$dir/build/build.log" | head -5 >&2
     die "$app: build failed, full log in $dir/build/build.log"
   }
@@ -158,6 +172,34 @@ build_qmake() {
   readelf -d "$dir/build/$app" | grep -q "$QT_DIR/lib" || warn "$app has no RPATH to $QT_DIR/lib"
   install -m 0755 "$dir/build/$app" "$LOCAL_BIN/$app"
   install_desktop_entry "$app" "$dir"
+}
+
+build_signed() {
+  local dir
+  dir=$(src_of signed)
+  pkg-config --exists poppler-qt6 libqpdf || die "signed: poppler-qt6 or libqpdf is missing, run $REPO_DIR/bootstrap.sh 10"
+  (
+    trap 'git -C "$dir" checkout --quiet -- src/stamper.cpp' EXIT
+    if ! pkg-config --atleast-version=12 libqpdf; then
+      sed -i 's/^    const auto rotate = page.getAttribute(/    auto rotate = page.getAttribute(/' "$dir/src/stamper.cpp"
+      grep -q '^    auto rotate = page.getAttribute(' "$dir/src/stamper.cpp" ||
+        die "signed: src/stamper.cpp no longer matches the qpdf 11 adjustment"
+    fi
+    PKG_CONFIG_PATH="$QT_DIR/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" build_qmake signed CONFIG+=c++20
+  ) || exit 1
+}
+
+build_titlebars() {
+  local dir
+  dir=$(src_of omarchy-hyprland-titlebars)
+  if ! pkg-config --exists hyprland lua5.4 || ! have g++-14; then
+    die "omarchy-hyprland-titlebars: Hyprland's headers, Lua's or g++-14 are missing, run $REPO_DIR/bootstrap.sh 10"
+  fi
+  rm -rf "$dir/build"
+  CXX=g++-14 cmake_build "$dir" "$dir/build" -DCMAKE_CXX_FLAGS="$(pkg-config --cflags lua5.4)"
+  [[ -f $dir/build/titlebars.so ]] || die "omarchy-hyprland-titlebars: no titlebars.so produced"
+  run_root /usr/bin/install -Dm644 "$dir/build/titlebars.so" "$(marker_of omarchy-hyprland-titlebars)"
+  hyprland_version >"$(hyprland_stamp)"
 }
 
 build_omasnap() {
@@ -212,6 +254,8 @@ build_one() {
     omasnap) build_omasnap ;;
     owe) build_owe ;;
     owe-lockfeed) build_owe_lockfeed ;;
+    signed) build_signed ;;
+    omarchy-hyprland-titlebars) build_titlebars ;;
   esac
   note "installed $(marker_of "$app")"
 }
@@ -225,6 +269,10 @@ remove_one() {
       rm -rf "$OMARCHY_HOME/.local/share/owe" "$OMARCHY_HOME/.local/share/doc/owe"
       ;;
     owe-lockfeed) rm -rf "$QT_DIR/qml/Owe" ;;
+    omarchy-hyprland-titlebars)
+      run_root /usr/bin/rm -rf /usr/lib/omarchy-hyprland-titlebars
+      rm -f "$(hyprland_stamp)"
+      ;;
     *) rm -f "$LOCAL_BIN/$app" "$APPS_DIR/$app.desktop" "$ICONS_DIR/$app.svg" ;;
   esac
   note "removed $app"
@@ -236,7 +284,7 @@ if [[ ${1:-} == --remove ]]; then
   shift
 fi
 apps=("$@")
-(( ${#apps[@]} > 0 )) || die "which app? omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed"
+(( ${#apps[@]} > 0 )) || die "which app? omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars"
 for app in "${apps[@]}"; do
   version_of "$app" >/dev/null
   if [[ $action == remove ]]; then remove_one "$app"; else build_one "$app"; fi
