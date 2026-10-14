@@ -112,7 +112,7 @@ classify_pkg() {
   done
   if command -v apt-cache >/dev/null 2>&1; then
     for n in $apt; do
-      if [[ -n $(apt-cache policy "$n" 2>/dev/null | awk '/^  Candidate:/ && $2 != "(none)" { print $2 }') ]]; then
+      if [[ -n $(LC_ALL=C apt-cache policy "$n" 2>/dev/null | awk '/^  Candidate:/ && $2 != "(none)" { print $2 }') ]]; then
         echo "apt offers $n here (not on the lists yet)"
         return 0
       fi
