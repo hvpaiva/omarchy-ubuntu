@@ -1,4 +1,4 @@
-From 3d495d1ffe1a8ce3e819104fec21d491e03422b6 Mon Sep 17 00:00:00 2001
+From 4ae288cc4f650d48fcdc1da1f9442d434dd02fdc Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -23,8 +23,8 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-present         |   3 +
  bin/omarchy-pkg-remove          |   3 +
  bin/omarchy-pkg-ubuntu          | 899 ++++++++++++++++++++++++++++++++
- shell/plugins/menu/MenuModel.js |  15 +-
- 12 files changed, 963 insertions(+), 1 deletion(-)
+ shell/plugins/menu/MenuModel.js |  13 +-
+ 12 files changed, 961 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -1089,32 +1089,23 @@ index 00000000..11847a65
 +  ;;
 +esac
 diff --git a/shell/plugins/menu/MenuModel.js b/shell/plugins/menu/MenuModel.js
-index c6dc7ed3..d46c3ce1 100644
+index c6dc7ed3..180d7c1a 100644
 --- a/shell/plugins/menu/MenuModel.js
 +++ b/shell/plugins/menu/MenuModel.js
-@@ -407,15 +407,28 @@ var GUARD_READERS = [
- // is set in the environment, which a login shell may well have done, so the
- // parser follows the indented lines rather than reading the first one and
- // dropping half of what is installed.
-+//
-+// Ubuntu port: without pacman the set is filled from dpkg (installed packages
-+// and what they provide) plus the installed snaps, and a name outside the set
-+// is handed to omarchy-pkg-installed, which knows the Ubuntu aliases, the
-+// flatpaks and the command fallback.
- function guardHelpers() {
-   return 'declare -A __omarchy_pkgs=()\n'
-+    + 'if command -v pacman &>/dev/null; then\n'
-     + 'mapfile -t __omarchy_pkg_names < <({ pacman -Qq; LC_ALL=C pacman -Qi'
-     + " | awk '/^[A-Za-z]/ { provides = ($0 ~ /^Provides/); sub(/^[^:]*: /, \"\") }"
+@@ -414,8 +414,19 @@ function guardHelpers() {
      + ' provides && $0 != "None" { n = split($0, p, " ");'
      + ' for (i = 1; i <= n; i++) { sub(/[<>=].*/, "", p[i]); print p[i] } }\'; } 2>/dev/null)\n'
-+    + 'else\n'
-+    + "mapfile -t __omarchy_pkg_names < <({ dpkg-query -W -f='${db:Status-Abbrev}\\t${binary:Package}\\t${Provides}\\n'"
+     + 'for __omarchy_pkg in "${__omarchy_pkg_names[@]}"; do __omarchy_pkgs[$__omarchy_pkg]=1; done\n'
++    // Ubuntu port: without pacman the set is filled from dpkg (installed packages
++    // and what they provide) plus the installed snaps, and a name outside the set
++    // is handed to omarchy-pkg-installed, which knows the Ubuntu aliases, the
++    // flatpaks and the command fallback.
++    + 'if ! command -v pacman &>/dev/null; then\n'
++    + "while IFS= read -r __omarchy_pkg; do __omarchy_pkgs[$__omarchy_pkg]=1; done < <({ dpkg-query -W -f='${db:Status-Abbrev}\\t${binary:Package}\\t${Provides}\\n'"
 +    + " | awk -F'\\t' '$1 ~ /^.i/ { sub(/:.*/, \"\", $2); print $2; n = split($3, p, \",\");"
 +    + ' for (i = 1; i <= n; i++) { gsub(/^ +| +$| *\\(.*\\)/, "", p[i]); if (p[i] != "") print p[i] } }\';'
 +    + " snap list 2>/dev/null | awk 'NR > 1 { print $1 }'; } 2>/dev/null)\n"
 +    + 'fi\n'
-     + 'for __omarchy_pkg in "${__omarchy_pkg_names[@]}"; do __omarchy_pkgs[$__omarchy_pkg]=1; done\n'
      + '__omarchy_pkg_has() { [[ -n ${__omarchy_pkgs[$1]-} ]] && return 0; '
 -    + '[[ $1 == *[\\<\\>=]* ]] && { pacman -Q "$1" &>/dev/null; return; }; return 1; }\n'
 +    + 'if command -v pacman &>/dev/null; then [[ $1 == *[\\<\\>=]* ]] && { pacman -Q "$1" &>/dev/null; return; }; return 1; fi; '
