@@ -47,7 +47,7 @@ if apt_installed cups-browsed; then
   systemctl try-restart cups.service cups-browsed.service >/dev/null 2>&1 || warn "cups-browsed did not restart; see journalctl -u cups-browsed"
 fi
 
-log "zram: swap in RAM as upstream; the disk swapfile stays, lower priority, for hibernation"
+log "zram: swap in RAM as upstream; Ubuntu's disk swapfile stays behind it at lower priority"
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-zram-generator
 install_file 644 /etc/systemd/zram-generator.conf <"$sysd/zram-generator.conf.d/90-omarchy.conf"
 install_file 644 /etc/tmpfiles.d/omarchy-zswap.conf <"$etc/tmpfiles.d/omarchy-zswap.conf"
