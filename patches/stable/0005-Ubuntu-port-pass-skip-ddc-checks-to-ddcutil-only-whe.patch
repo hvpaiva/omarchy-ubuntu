@@ -1,4 +1,4 @@
-From 48e6589e90130f9b3ce109daeb2a7d11654e85c3 Mon Sep 17 00:00:00 2001
+From 9f226e80b44509deda5b7951fca603e742fc0f0f Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:52:07 -0300
 Subject: [PATCH 05/13] Ubuntu port: pass --skip-ddc-checks to ddcutil only
