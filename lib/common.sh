@@ -93,7 +93,7 @@ apt_retry() { # apt_retry <apt-get arguments...>
   done
 }
 
-# git_checkout <dir> <url> <ref>: shallow clone at a tag, or switch an existing clone.
+# git_checkout <dir> <url> <ref>: shallow clone at a tag or a commit, or switch an existing clone.
 git_checkout() {
   local dir=$1 url=$2 ref=$3
   if [[ -d $dir/.git ]]; then
@@ -101,6 +101,12 @@ git_checkout() {
     git -C "$dir" remote set-url origin "$url"
     git -C "$dir" fetch --quiet --depth 1 origin "$ref" 2>/dev/null || git -C "$dir" fetch --quiet --tags origin
     git -C "$dir" -c advice.detachedHead=false checkout --quiet "$ref" 2>/dev/null || git -C "$dir" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
+  elif [[ $ref =~ ^[0-9a-f]{40}$ ]]; then
+    # GitHub serves a commit by hash to fetch, which clone --branch cannot ask for.
+    git init --quiet "$dir"
+    git -C "$dir" remote add origin "$url"
+    git -C "$dir" fetch --quiet --depth 1 origin "$ref"
+    git -C "$dir" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
   else
     git -c advice.detachedHead=false clone --quiet --depth 1 --branch "$ref" "$url" "$dir"
   fi

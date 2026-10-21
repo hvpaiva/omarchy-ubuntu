@@ -66,11 +66,28 @@ hyprland_stamp() {
   echo "$(src_of omarchy-hyprland-titlebars)/build/hyprland-version"
 }
 
+# Everything but owe (meson, no Qt) and the titlebars (Hyprland's ABI) links the
+# Qt tree, so a new Qt is a rebuild; the Qt built against is stamped next to
+# each build.
+qt_stamp_of() {
+  case $1 in
+    owe-lockfeed) echo "$(src_of owe-lockfeed)/build-lockfeed/qt-version" ;;
+    *) echo "$(src_of "$1")/build/qt-version" ;;
+  esac
+}
+
+links_qt() {
+  [[ $1 != owe && $1 != omarchy-hyprland-titlebars ]]
+}
+
 up_to_date() {
   local app=$1 tag
   tag=$(version_of "$app")
   [[ -e $(marker_of "$app") ]] || return 1
   git -C "$(src_of "$app")" describe --tags 2>/dev/null | grep -q "$tag" || return 1
+  if links_qt "$app"; then
+    [[ $(cat "$(qt_stamp_of "$app")" 2>/dev/null) == "$QT_VERSION" ]] || return 1
+  fi
   [[ $app != omarchy-hyprland-titlebars || $(cat "$(hyprland_stamp)" 2>/dev/null) == "$(hyprland_version)" ]]
 }
 
@@ -171,8 +188,9 @@ build_qmake() {
     grep -isE "error" "$dir/build/build.log" | head -5 >&2 || true
     die "$app: build failed, full log in $dir/build/build.log"
   }
-  # qmake adds an RPATH to the Qt lib dir for non-system Qt installs; keep it honest.
-  readelf -d "$dir/build/$app" | grep -q "$QT_DIR/lib" || warn "$app has no RPATH to $QT_DIR/lib"
+  # qmake adds an RPATH to the Qt lib dir for non-system Qt installs; a binary
+  # without it would load noble's Qt 6.4 and fail on the first newer symbol.
+  readelf -d "$dir/build/$app" | grep -q "$QT_DIR/lib" || die "$app has no RPATH to $QT_DIR/lib"
   install -m 0755 "$dir/build/$app" "$LOCAL_BIN/$app"
   install_desktop_entry "$app" "$dir"
 }
@@ -260,6 +278,11 @@ build_one() {
   fi
   log "$app $tag"
   checkout "$app"
+  # Objects and a CMakeCache from another Qt would be reused against the old
+  # tree (make sees nothing newer, cmake keeps its Qt6_DIR): start clean.
+  if links_qt "$app" && [[ $(cat "$(qt_stamp_of "$app")" 2>/dev/null) != "$QT_VERSION" ]]; then
+    rm -rf "$(dirname "$(qt_stamp_of "$app")")"
+  fi
   case $app in
     omacalc | omawrite | omacut | hype | monologue) build_qmake "$app" ;;
     omasnap) build_omasnap ;;
@@ -268,6 +291,9 @@ build_one() {
     signed) build_signed ;;
     omarchy-hyprland-titlebars) build_titlebars ;;
   esac
+  if links_qt "$app"; then
+    echo "$QT_VERSION" >"$(qt_stamp_of "$app")"
+  fi
   note "installed $(marker_of "$app")"
 }
 

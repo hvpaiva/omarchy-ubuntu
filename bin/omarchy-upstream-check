@@ -327,7 +327,8 @@ compare_pins() { # compare_pins <what> <url> <map name>
     theirs=$(awk -F'\t' -v n="$name" '$1 == n { print $2; exit }' "$work/$what.tsv")
     if [[ -z $theirs ]]; then
       echo "- \`$name\`: port $pin, not in the $what"
-    elif [[ $pin != "$theirs" ]]; then
+    # A commit pinned here is spelled by pacman as <version>.r<n>.g<short hash>.
+    elif [[ $pin != "$theirs" && $theirs != *.g"${pin:0:7}" ]]; then
       echo "- \`$name\`: **port $pin, $what $theirs**"
       problem
     else
