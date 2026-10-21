@@ -122,7 +122,9 @@ ensure_cmake() {
   # Installed, not `mise use`d: the global mise config is the user's, and a
   # build tool pinned there would follow them to every machine.
   mise install -q "cmake@$CMAKE_VERSION" >/dev/null || die "mise could not install cmake $CMAKE_VERSION"
-  PATH="$(mise where "cmake@$CMAKE_VERSION")/bin:$PATH"
+  # The binary's own directory: `mise where` is the version's root, under
+  # which the release tarball keeps its top directory (cmake-<ver>-linux-x86_64).
+  PATH="$(dirname "$(mise exec "cmake@$CMAKE_VERSION" -- sh -c 'command -v cmake')"):$PATH"
   hash -r
   cmake --version | grep -q " $CMAKE_VERSION" || die "cmake $CMAKE_VERSION not first on PATH"
 }
