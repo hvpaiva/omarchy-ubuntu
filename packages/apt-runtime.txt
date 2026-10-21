@@ -60,7 +60,7 @@ rtkit
 desktop-file-utils
 pciutils
 
-# Scripting
+# Scripting (zstd: omarchy-upstream-check reads upstream's pacman databases)
 lua5.4
 jq
 fzf
@@ -70,6 +70,7 @@ fd-find
 git
 curl
 unzip
+zstd
 
 # GTK/GNOME bits the theme switcher drives
 gnome-themes-extra

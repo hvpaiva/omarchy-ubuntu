@@ -277,5 +277,66 @@ if new_units=$(g diff --name-only --diff-filter=A "$base" "$target" -- default/s
 else
   echo "No new unit."
 fi
+echo
+
+echo "## Versions"
+echo
+# What versions.env pins against what the channel's ring and upstream's Arch
+# snapshot mirror carry at the target: the port builds or downloads what
+# upstream packages, so a pin behind either is drift. Both are pacman
+# databases, zstd tars of <name>-<version>-<release>/desc entries, read off
+# the pacman configuration the target ships.
+case $OMARCHY_CHANNEL in
+  stable | rc) ring=$OMARCHY_CHANNEL ;;
+  *) ring=edge ;;
+esac
+db_versions() { # db_versions <url> <file>: one "name<TAB>version" per package
+  curl -fsSL -o "$2" "$1" 2>/dev/null && tar --zstd -tf "$2" 2>/dev/null |
+    sed -n 's#/$##p' | awk -F- '{ ver = $(NF - 1); NF -= 2; OFS = "-"; $1 = $1; print $0 "\t" ver }'
+}
+ring_url=$(g show "$target:default/pacman/pacman-$ring.conf" 2>/dev/null | sed -n 's#^Server = \(https://pkgs\.omarchy\.org/[a-z]*/\)\$arch$#\1x86_64/omarchy.db#p' | head -n1)
+mirror_url=$(g show "$target:default/pacman/mirrorlist-$ring" 2>/dev/null | sed -n 's#^Server = \(.*\)\$repo/os/\$arch$#\1extra/os/x86_64/extra.db#p' | head -n1)
+declare -A ring_package=(
+  [TENSAKU]=tensaku [TTFX]=ttfx [OMACALC]=omacalc [OMAWRITE]=omawrite [OMACUT]=omacut [HYPE]=hype
+  [MONOLOGUE]=monologue [OMASNAP]=omasnap [OWE]=owe [SIGNED]=signed [TITLEBARS]=omarchy-hyprland-titlebars
+  [CLIAMP]=cliamp [HERDR]=herdr [AETHER]=aether [SHARE_PICKER]=hyprland-preview-share-picker
+  [VOXTYPE]=voxtype-bin [LOCALSEND]=localsend [QUICKSHELL]=quickshell
+)
+declare -A mirror_package=(
+  [QT]=qt6-base [GUM]=gum [HYPRPICKER]=hyprpicker [XDG_TERMINAL_EXEC]=xdg-terminal-exec
+  [GSR]=gpu-screen-recorder [GTK4_LAYER_SHELL]=gtk4-layer-shell [NERD_FONTS]=ttf-jetbrains-mono-nerd
+)
+matched=0
+compare_pins() { # compare_pins <what> <url> <map name>
+  local what=$1 url=$2 var pin_var pin theirs name
+  local -n map=$3
+  if [[ -z $url ]]; then
+    echo "- $what: no pacman configuration for the $ring ring at $target"
+    problem
+    return
+  fi
+  if ! db_versions "$url" "$work/$what.db" >"$work/$what.tsv" || [[ ! -s $work/$what.tsv ]]; then
+    echo "- $what: could not read $url (network, or no zstd for tar)"
+    problem
+    return
+  fi
+  for var in $(printf '%s\n' "${!map[@]}" | sort); do
+    name=${map[$var]}
+    pin_var=${var}_VERSION
+    pin=${!pin_var#v}
+    theirs=$(awk -F'\t' -v n="$name" '$1 == n { print $2; exit }' "$work/$what.tsv")
+    if [[ -z $theirs ]]; then
+      echo "- \`$name\`: port $pin, not in the $what"
+    elif [[ $pin != "$theirs" ]]; then
+      echo "- \`$name\`: **port $pin, $what $theirs**"
+      problem
+    else
+      matched=$((matched + 1))
+    fi
+  done
+}
+compare_pins "$ring ring" "$ring_url" ring_package
+compare_pins "snapshot mirror" "$mirror_url" mirror_package
+echo "- $matched of $(( ${#ring_package[@]} + ${#mirror_package[@]} )) pins match."
 
 exit $status
