@@ -135,8 +135,10 @@ patches rebase cleanly (and on which files they conflict), each package added
 or removed upstream with the Ubuntu source the port knows for it, the new
 migrations and whether they use Arch tooling, every change in the directories
 the port mirrors by hand, the `etc/` files step 57 neither installs nor lists
-as skipped, and the new user units. It exits 1 on a conflict or on a package
-without an Ubuntu source, 0 otherwise.
+as skipped, the new user units, and every version `versions.env` pins against
+what the channel's ring (`pkgs.omarchy.org`) and upstream's Arch snapshot
+mirror carry at the target. It exits 1 on a conflict, on a package without an
+Ubuntu source or on a pin behind upstream, 0 otherwise.
 
 The `upstream` workflow runs it every Monday (and on demand, for one channel
 or all, with a ref of your choice) and keeps one issue per channel: for stable
