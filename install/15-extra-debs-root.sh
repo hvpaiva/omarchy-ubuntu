@@ -45,7 +45,8 @@ install_deb() { # install_deb <name> <github repo> <tag> <asset> <version>
   # from the cache at the old one.
   rm -f "$DOWNLOADS/$asset"
   su -s /bin/bash "$OMARCHY_USER" -c "REPO_DIR='$REPO_DIR'; source '$REPO_DIR/lib/common.sh'; github_release_download '$repo' '$tag' '$asset'"
-  apt-get install -y --allow-downgrades "$DOWNLOADS/$asset"
+  # The .deb is local; what it depends on comes through apt, the PPAs included.
+  apt_retry install -y --allow-downgrades "$DOWNLOADS/$asset"
 }
 
 while read -r name repo tag asset version; do

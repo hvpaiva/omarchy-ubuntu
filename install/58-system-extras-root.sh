@@ -6,10 +6,10 @@ etc=$OMARCHY_PATH/etc
 sysd=$OMARCHY_PATH/default/systemd
 
 log "mise: newest package from its apt repository"
-DEBIAN_FRONTEND=noninteractive apt-get install -y --only-upgrade mise
+apt_retry install -y --only-upgrade mise
 
 log "packages Omarchy's base has and the port lacked: Cantarell (GTK's default font), printer setup, pipewire-jack, qemu-user-static, tldr"
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends fonts-cantarell system-config-printer pipewire-jack qemu-user-static tldr
+apt_retry install -y --no-install-recommends fonts-cantarell system-config-printer pipewire-jack qemu-user-static tldr
 
 log "systemd-oomd: apps are the kill candidates, not the whole session"
 install_file 644 /etc/systemd/user/app.slice.d/10-oomd.conf <"$sysd/user/app.slice.d/10-oomd.conf"
@@ -48,7 +48,7 @@ if apt_installed cups-browsed; then
 fi
 
 log "zram: swap in RAM as upstream; Ubuntu's disk swapfile stays behind it at lower priority"
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends systemd-zram-generator
+apt_retry install -y --no-install-recommends systemd-zram-generator
 install_file 644 /etc/systemd/zram-generator.conf <"$sysd/zram-generator.conf.d/90-omarchy.conf"
 install_file 644 /etc/tmpfiles.d/omarchy-zswap.conf <"$etc/tmpfiles.d/omarchy-zswap.conf"
 systemctl daemon-reload

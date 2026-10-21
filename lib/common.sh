@@ -71,11 +71,13 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # Launchpad's PPA mirrors answer 503 in bursts that outlast apt's own per-file
 # retries; a later apt-get picks up where the last one stopped, the archives
-# already fetched staying in its cache.
+# already fetched staying in its cache. Error-Mode=any: an index `update`
+# could not fetch is otherwise a warning and exit 0, and the install after it
+# finds no candidate (as pacman -Sy, upstream's, which fails on a lost sync).
 apt_retry() { # apt_retry <apt-get arguments...>
   local try
   for try in 1 2 3 4 5; do
-    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 "$@" && return 0
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 -o APT::Update::Error-Mode=any "$@" && return 0
     (( try < 5 )) || return 1
     warn "apt-get failed (attempt $try of 5); again in 60 s"
     sleep 60
