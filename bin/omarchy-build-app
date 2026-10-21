@@ -82,11 +82,11 @@ checkout() {
 cmake_build() { # cmake_build <source dir> <build dir> <extra cmake args...>
   local src=$1 build=$2
   shift 2
-  cmake -S "$src" -B "$build" -G Ninja \
+  quietly cmake -S "$src" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_PREFIX_PATH="$QT_DIR" \
     -DCMAKE_INSTALL_RPATH="$QT_DIR/lib" \
-    "$@" >/dev/null
+    "$@"
   cmake --build "$build" --parallel "$JOBS" >"$build/build.log" 2>&1 || {
     grep -iE "error" "$build/build.log" | head -5 >&2
     die "build failed, full log in $build/build.log"
@@ -133,7 +133,7 @@ ensure_ecm() {
   log "extra-cmake-modules $ECM_VERSION (into $QT_DIR)"
   git_checkout "$SRC_DIR/extra-cmake-modules" https://github.com/KDE/extra-cmake-modules "$ECM_VERSION"
   cmake_build "$SRC_DIR/extra-cmake-modules" "$SRC_DIR/extra-cmake-modules/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF -DBUILD_HTML_DOCS=OFF -DBUILD_MAN_DOCS=OFF -DBUILD_QTHELP_DOCS=OFF
-  cmake --install "$SRC_DIR/extra-cmake-modules/build" >/dev/null
+  quietly cmake --install "$SRC_DIR/extra-cmake-modules/build"
 }
 
 ensure_layer_shell_qt() {
@@ -144,7 +144,7 @@ ensure_layer_shell_qt() {
   # KDE's install dirs would pick Debian's lib/x86_64-linux-gnu; the Qt tree keeps lib/.
   cmake_build "$SRC_DIR/layer-shell-qt" "$SRC_DIR/layer-shell-qt/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF \
     -DKDE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_CXX_FLAGS="-I$(wayland_compat)"
-  cmake --install "$SRC_DIR/layer-shell-qt/build" >/dev/null
+  quietly cmake --install "$SRC_DIR/layer-shell-qt/build"
   [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake ]] || die "layer-shell-qt did not install into $QT_DIR"
 }
 
@@ -164,7 +164,7 @@ build_qmake() {
   shift
   dir=$(src_of "$app")
   mkdir -p "$dir/build"
-  (cd "$dir/build" && "$QT_DIR/bin/qmake6" "$@" "../$app.pro" >/dev/null && make -j"$JOBS" >build.log 2>&1) || {
+  (cd "$dir/build" && quietly "$QT_DIR/bin/qmake6" "$@" "../$app.pro" && make -j"$JOBS" >build.log 2>&1) || {
     grep -iE "error" "$dir/build/build.log" | head -5 >&2
     die "$app: build failed, full log in $dir/build/build.log"
   }
@@ -208,18 +208,18 @@ build_omasnap() {
   ensure_layer_shell_qt
   cmake_build "$dir" "$dir/build" -DCMAKE_INSTALL_PREFIX="$OMARCHY_HOME/.local"
   [[ -x $dir/build/omasnap ]] || die "omasnap: no binary produced"
-  cmake --install "$dir/build" >/dev/null
+  quietly cmake --install "$dir/build"
 }
 
 build_owe() {
   local dir
   dir=$(src_of owe)
-  [[ -d $dir/build ]] || meson setup "$dir/build" "$dir" --prefix="$OMARCHY_HOME/.local" --buildtype=release >/dev/null
+  [[ -d $dir/build ]] || quietly meson setup "$dir/build" "$dir" --prefix="$OMARCHY_HOME/.local" --buildtype=release
   ninja -C "$dir/build" >"$dir/build/build.log" 2>&1 || {
     grep -iE "error" "$dir/build/build.log" | head -5 >&2
     die "owe: build failed, full log in $dir/build/build.log"
   }
-  ninja -C "$dir/build" install >/dev/null
+  quietly ninja -C "$dir/build" install
   [[ -x $LOCAL_BIN/owed ]] || die "owe: no owed produced"
   # The package puts these under /usr; here they follow the ~/.local prefix. The
   # unit already starts %h/.local/bin/owed.
@@ -235,7 +235,7 @@ build_owe_lockfeed() {
   dir=$(src_of owe-lockfeed)
   staging=$dir/build-lockfeed/staging
   cmake_build "$dir/qml-plugin" "$dir/build-lockfeed" -DCMAKE_INSTALL_PREFIX="$staging" -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_TESTING=OFF
-  rm -rf "$staging" && cmake --install "$dir/build-lockfeed" >/dev/null
+  rm -rf "$staging" && quietly cmake --install "$dir/build-lockfeed"
   [[ -f $staging/lib/qt6/qml/Owe/LockFeed/qmldir ]] || die "owe-lockfeed: no QML module produced"
   rm -rf "$QT_DIR/qml/Owe" && cp -a "$staging/lib/qt6/qml/Owe" "$QT_DIR/qml/Owe"
 }
