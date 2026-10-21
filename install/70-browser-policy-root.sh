@@ -28,10 +28,20 @@ setup_dir() {
   done
   find "$d" -mindepth 1 -maxdepth 1 ! -user root -exec rm -rf -- {} +
 }
+# Links reach the browser through omarchy-browser.desktop since 4.0.5, so the
+# browser must not offer to make itself the default and rewrite mimeapps.list
+# behind Omarchy's back (upstream's browser_policy_install_defaults).
+defaults=$OMARCHY_PATH/default/chromium/policies/omarchy.json
+install_defaults() {
+  [[ -f $defaults ]] || { note "not yet upstream: default/chromium/policies/omarchy.json"; return 0; }
+  install -m 0644 -o root -g root -T "$defaults" "$1/omarchy.json"
+}
 log "policy directories"
 setup_dir /etc/chromium/policies/managed
+install_defaults /etc/chromium/policies/managed
 if have google-chrome || have google-chrome-stable; then
   setup_dir /etc/opt/chrome/policies/managed
+  install_defaults /etc/opt/chrome/policies/managed
 fi
 
 # Remember what was applied so the updater can tell when upstream changes it.

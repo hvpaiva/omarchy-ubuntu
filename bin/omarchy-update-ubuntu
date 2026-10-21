@@ -288,12 +288,14 @@ step "Pieces outside the checkout"
 # of the upstream file saved when it was last applied.
 applied_dir=$PORT_DIR/.applied
 mkdir -p "$applied_dir"
+browser_defaults=$OMARCHY_PATH/default/chromium/policies/omarchy.json
 if ! cmp -s "$OMARCHY_PATH/bin/omarchy-theme-set-browser-policy" /usr/bin/omarchy-theme-set-browser-policy ||
-  ! cmp -s "$OMARCHY_PATH/etc/sudoers.d/omarchy-theme-browser" "$applied_dir/omarchy-theme-browser"; then
-  echo "Browser policy helper or sudoers changed upstream; reapplying (root)."
+  ! cmp -s "$OMARCHY_PATH/etc/sudoers.d/omarchy-theme-browser" "$applied_dir/omarchy-theme-browser" ||
+  { [[ -f $browser_defaults ]] && ! cmp -s "$browser_defaults" /etc/chromium/policies/managed/omarchy.json; }; then
+  echo "Browser policy helper, sudoers or default policy changed upstream; reapplying (root)."
   run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/70-browser-policy-root.sh"
 else
-  echo "Browser policy helper and sudoers match the checkout."
+  echo "Browser policy helper, sudoers and default policy match the checkout."
 fi
 if ! REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --manifest | cmp -s - "$applied_dir/57-system-tweaks.sha256"; then
   echo "Omarchy's system tweaks changed upstream; reapplying (root)."

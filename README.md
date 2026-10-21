@@ -148,7 +148,7 @@ prints the command for the tag it is about to apply.
 ## Status
 
 Built and used daily on a Dell Pro 14 Plus (Lunar Lake) with Ubuntu 24.04.5,
-Hyprland 0.56 from `ppa:cppiber/hyprland`, Omarchy v4.0.4. Screen sharing,
+Hyprland 0.56 from `ppa:cppiber/hyprland`, Omarchy v4.0.6. Screen sharing,
 screen recording, fingerprint lock and polkit, Taildrop, dictation and the
 whole theme pipeline work. Not covered: Omarchy's ISO installer, Limine and
 snapper snapshots, the SDDM theme, Plymouth.

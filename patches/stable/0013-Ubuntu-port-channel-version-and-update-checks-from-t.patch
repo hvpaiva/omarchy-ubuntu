@@ -1,4 +1,4 @@
-From 59cbcddccd1bc1f8f96c1d30387eec717728167d Mon Sep 17 00:00:00 2001
+From 960a71ff720010c71b5b3d57a5803be964bcc0d0 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Wed, 21 Oct 2026 09:52:18 -0300
 Subject: [PATCH 13/13] Ubuntu port: channel, version and update checks from
@@ -34,7 +34,7 @@ index cc35e13c..3fd94384 100755
  # the package-backed install at /usr/share/omarchy. This takes precedence over
  # the package channels, since the checkout overrides whatever is installed.
 diff --git a/bin/omarchy-channel-set b/bin/omarchy-channel-set
-index 7e112388..2f961d8f 100755
+index 6ef5a0ad..a9fda5a8 100755
 --- a/bin/omarchy-channel-set
 +++ b/bin/omarchy-channel-set
 @@ -6,6 +6,12 @@

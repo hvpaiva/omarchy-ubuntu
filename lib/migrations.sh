@@ -11,11 +11,15 @@
 
 # Marked done, never run.
 OMARCHY_MIGRATIONS_ARCH_ONLY=(
+  1788996284.sh # repairs omarchy-nvim's clipboard provider through pacman; the port has no omarchy-nvim package
+  1791403252.sh # reorders /etc/pacman.conf so Omarchy's repository comes first
 )
 
 # Run as is although they mention Arch tooling: each exits before touching it
 # when the tooling is absent.
 OMARCHY_MIGRATIONS_RUN=(
+  1791581004.sh # rebuilds the Limine boot image; exits at once without limine-mkinitcpio
+  1791621765.sh # the same, for the keyboard layout in the initramfs
 )
 
 migration_listed() {
