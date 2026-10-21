@@ -21,7 +21,7 @@ cargo_app() { # cargo_app <bin> <repo url> <tag> [extra cargo args...]
   log "$bin $tag"
   git_checkout "$SRC_DIR/$bin" "$url" "$tag"
   git -C "$SRC_DIR/$bin" submodule update --init --depth 1 --quiet 2>/dev/null || true
-  (cd "$SRC_DIR/$bin" && cargo build --release "$@" 2>&1 | tail -2)
+  (cd "$SRC_DIR/$bin" && quietly cargo build --release "$@")
   install -m 0755 "$SRC_DIR/$bin/target/release/$bin" "$LOCAL_BIN/$bin"
 }
 
@@ -29,9 +29,9 @@ cargo_app() { # cargo_app <bin> <repo url> <tag> [extra cargo args...]
 if ! pkg-config --exists 'gtk4-layer-shell-0 >= 1.0'; then
   log "gtk4-layer-shell $GTK4_LAYER_SHELL_VERSION (meson, /usr/local, needs sudo for install)"
   git_checkout "$SRC_DIR/gtk4-layer-shell" https://github.com/wmww/gtk4-layer-shell "$GTK4_LAYER_SHELL_VERSION"
-  meson setup "$SRC_DIR/gtk4-layer-shell/build" "$SRC_DIR/gtk4-layer-shell" --prefix=/usr/local >/dev/null
+  quietly meson setup "$SRC_DIR/gtk4-layer-shell/build" "$SRC_DIR/gtk4-layer-shell" --prefix=/usr/local
   ninja -C "$SRC_DIR/gtk4-layer-shell/build"
-  sudo ninja -C "$SRC_DIR/gtk4-layer-shell/build" install >/dev/null
+  quietly sudo ninja -C "$SRC_DIR/gtk4-layer-shell/build" install
   sudo ldconfig
 fi
 
@@ -46,9 +46,9 @@ fi
 if ! have hyprpicker; then
   log "hyprpicker $HYPRPICKER_VERSION"
   git_checkout "$SRC_DIR/hyprpicker" https://github.com/hyprwm/hyprpicker "$HYPRPICKER_VERSION"
-  cmake -S "$SRC_DIR/hyprpicker" -B "$SRC_DIR/hyprpicker/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$OMARCHY_HOME/.local" >/dev/null
-  cmake --build "$SRC_DIR/hyprpicker/build" -j "$JOBS" >/dev/null
-  cmake --install "$SRC_DIR/hyprpicker/build" >/dev/null
+  quietly cmake -S "$SRC_DIR/hyprpicker" -B "$SRC_DIR/hyprpicker/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$OMARCHY_HOME/.local"
+  quietly cmake --build "$SRC_DIR/hyprpicker/build" -j "$JOBS"
+  quietly cmake --install "$SRC_DIR/hyprpicker/build"
 fi
 
 cargo_app tensaku https://github.com/omacom-io/tensaku "$TENSAKU_VERSION" --features ci-release
@@ -82,10 +82,10 @@ if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION"; then
   log "gpu-screen-recorder $GSR_VERSION (meson)"
   git_checkout "$SRC_DIR/gpu-screen-recorder" https://repo.dec05eba.com/gpu-screen-recorder "$GSR_VERSION"
   rm -rf "$SRC_DIR/gpu-screen-recorder/build"
-  meson setup "$SRC_DIR/gpu-screen-recorder/build" "$SRC_DIR/gpu-screen-recorder" --buildtype=release \
-    --prefix="$OMARCHY_HOME/.local" -Dcapabilities=false -Dsystemd=false -Dnvidia_suspend_fix=false >/dev/null
-  ninja -C "$SRC_DIR/gpu-screen-recorder/build" >/dev/null
-  meson install -C "$SRC_DIR/gpu-screen-recorder/build" >/dev/null
+  quietly meson setup "$SRC_DIR/gpu-screen-recorder/build" "$SRC_DIR/gpu-screen-recorder" --buildtype=release \
+    --prefix="$OMARCHY_HOME/.local" -Dcapabilities=false -Dsystemd=false -Dnvidia_suspend_fix=false
+  quietly ninja -C "$SRC_DIR/gpu-screen-recorder/build"
+  quietly meson install -C "$SRC_DIR/gpu-screen-recorder/build"
   note "gsr-kms-server gets cap_sys_admin in install/55-root.sh"
 fi
 
