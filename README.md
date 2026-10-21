@@ -18,7 +18,7 @@ run it: a git checkout in "dev link" mode, with the shell built from source.
 
 ## What you get
 
-- `omarchy-shell` (Quickshell 0.3.1 against Qt 6.11): bar, menu, notifications,
+- `omarchy-shell` (Omarchy's Quickshell build against Qt 6.12): bar, menu, notifications,
   OSD, audio/bluetooth/network/power/monitor panels, wallpaper, lock screen with
   password and fingerprint, idle screensaver, clipboard and emoji pickers,
   polkit dialog.
