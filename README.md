@@ -74,7 +74,7 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `install/` | numbered steps: apt, extra .debs, Qt, toolchains, Omarchy checkout, Quickshell, tools, user, root, config, session, browser policy, PATH |
 | `versions.env` | pinned versions for everything cloned or downloaded |
 | `patches/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (apt backend behind the package helpers, update hand-off, logout without uwsm, theme and app fixes); each one touches as little of upstream as it can, so the next tag rebases without conflicts |
-| `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; `monitors.lua.example` |
+| `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; the other Hyprland files are seeded from upstream's stubs |
 | `etc/` | PAM stacks (lock, polkit with fingerprint), polkit rule, wayland session entry |
 | `bin/` | `omarchy-update-ubuntu`, `omarchy-upstream-check`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
 | `.github/workflows/upstream.yml` | weekly report of what the next Omarchy brings for the port, posted as an issue |
