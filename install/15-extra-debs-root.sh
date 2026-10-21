@@ -10,6 +10,8 @@ source "${REPO_DIR:?}/lib/common.sh"
 #   LocalSend: the Super+Ctrl+S share menu (`localsend --headless send`).
 #   Voxtype: dictation (Super+Ctrl+X / F9); the .deb ships the CPU, Vulkan and OSD variants.
 #   Ghostty: Omarchy's default terminal, in mkasberg/ghostty-ubuntu's build for 24.04.
+#   Aether: the theming app. Omarchy's own package installs the release binary
+#   rather than building it; the release also ships a .deb, built on Ubuntu 24.04.
 debs() {
   cat <<EOF
 gum charmbracelet/gum v$GUM_VERSION gum_${GUM_VERSION}_amd64.deb $GUM_VERSION
@@ -17,6 +19,7 @@ fastfetch fastfetch-cli/fastfetch $FASTFETCH_VERSION fastfetch-linux-amd64.deb $
 localsend localsend/localsend v$LOCALSEND_VERSION LocalSend-${LOCALSEND_VERSION}-linux-x86-64.deb $LOCALSEND_VERSION
 voxtype peteonrails/voxtype v$VOXTYPE_VERSION voxtype_${VOXTYPE_VERSION}-1_amd64.deb $VOXTYPE_VERSION
 ghostty mkasberg/ghostty-ubuntu ${GHOSTTY_DEB/.ppa/-ppa} ghostty_${GHOSTTY_DEB}_amd64_24.04.deb $GHOSTTY_DEB
+aether omacom/aether $AETHER_VERSION aether_${AETHER_VERSION#v}_amd64.deb ${AETHER_VERSION#v}
 EOF
 }
 
