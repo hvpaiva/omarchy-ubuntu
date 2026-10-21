@@ -47,7 +47,8 @@ skipped_files=(
   etc/limine-entry-tool.d/omarchy-uki.conf                # Arch boot stack
   etc/mkinitcpio.conf.d/omarchy_hooks.conf                # Arch boot stack
   etc/mkinitcpio.conf.d/thunderbolt_module.conf           # Arch boot stack
-  etc/nsswitch.conf                                       # Ubuntu's carries sss for the corporate login
+  etc/mkinitcpio.conf.d/omarchy_vconsole.conf             # Arch boot stack
+  etc/nsswitch.conf                                      # Ubuntu's carries sss for the corporate login
   etc/plymouth/plymouthd.conf                             # 59 sets the theme through update-alternatives
   etc/profile.d/omarchy.sh                                # 55 writes the dev-link version
   etc/sddm.conf.d/10-theme.conf                           # GDM

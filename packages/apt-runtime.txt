@@ -53,6 +53,13 @@ exfatprogs
 bluez-tools
 network-manager
 
+# Realtime scheduling for the speaker tuning host (it asks RTKit directly since
+# 4.0.5), the desktop database the link routing refreshes, lspci for the
+# hardware probes
+rtkit
+desktop-file-utils
+pciutils
+
 # Scripting
 lua5.4
 jq
