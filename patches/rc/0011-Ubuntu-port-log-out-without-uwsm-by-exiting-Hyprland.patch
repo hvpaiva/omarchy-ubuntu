@@ -1,0 +1,37 @@
+From 553311f692ea45c3dce036cf0e829670d8d43a16 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <contact@hvpaiva.dev>
+Date: Wed, 21 Oct 2026 11:04:57 -0300
+Subject: [PATCH 11/11] Ubuntu port: log out without uwsm by exiting Hyprland
+
+omarchy-system only knows uwsm stop, which does nothing when the display
+manager started Hyprland directly: windows closed and the session stayed.
+Without an active uwsm session, exit the compositor, which ends the GDM
+session.
+---
+ bin/omarchy-system | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/bin/omarchy-system b/bin/omarchy-system
+index 02ab05c3..9be20f1f 100755
+--- a/bin/omarchy-system
++++ b/bin/omarchy-system
+@@ -18,7 +18,15 @@ fi
+ 
+ action=${1:-}
+ case $action in
+-  logout) command=(uwsm stop) ;;
++  # Ubuntu port: a session the display manager started without uwsm ends when
++  # the compositor exits.
++  logout)
++    if uwsm check is-active >/dev/null 2>&1; then
++      command=(uwsm stop)
++    else
++      command=(hyprctl dispatch 'hl.dsp.exit()')
++    fi
++    ;;
+   reboot) command=(systemctl reboot --no-wall) ;;
+   shutdown) command=(systemctl poweroff --no-wall) ;;
+   *) echo "$usage" >&2; exit 2 ;;
+-- 
+2.55.0
+

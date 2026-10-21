@@ -1,4 +1,4 @@
-From db3d131c9d6e21647187f8726df1297d5742591f Mon Sep 17 00:00:00 2001
+From 036f06c06a821e715f1fb8dd5b815404a50ca77f Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 21:18:11 -0300
 Subject: [PATCH 03/13] Ubuntu port: log out without uwsm by exiting Hyprland
