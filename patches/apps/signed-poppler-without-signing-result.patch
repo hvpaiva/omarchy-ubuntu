@@ -1,0 +1,31 @@
+diff --git a/src/signer.cpp b/src/signer.cpp
+index 214734b..f28c42e 100644
+--- a/src/signer.cpp
++++ b/src/signer.cpp
+@@ -200,23 +200,9 @@ Result sign(const QString &path, const QString &certNickname) {
+ 
+     if (!converter->sign(data)) {
+         QFile::remove(tempName);
+-        using SR = Poppler::PDFConverter::SigningResult;
+-        switch (converter->lastSigningResult()) {
+-        case SR::UserCancelled:
+-            return {false, true, QStringLiteral("signing was cancelled")};
+-        case SR::KeyMissing:
+-            return {false, false, QStringLiteral("the certificate is no longer in the database")};
+-        case SR::BadPassphrase:
+-            return {false, false, QStringLiteral("the passphrase didn't work")};
+-        case SR::WriteFailed:
+-            return {false, false, QStringLiteral("the file couldn't be written")};
+-        default: {
+-            const Poppler::ErrorString details = converter->lastSigningErrorDetails();
+-            if (details.type == Poppler::ErrorStringType::UserString && !details.data.toString().isEmpty())
+-                return {false, false, details.data.toString()};
+-            return {false, false, QStringLiteral("signing failed")};
+-        }
+-        }
++        // This poppler has no lastSigningResult: a cancelled passphrase
++        // prompt, a missing key and a write error all look the same.
++        return {false, false, QStringLiteral("signing failed")};
+     }
+ 
+     // Swap the signed temp file into place in one step, so a crash leaves

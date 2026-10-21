@@ -181,11 +181,17 @@ build_signed() {
   dir=$(src_of signed)
   pkg-config --exists poppler-qt6 libqpdf || die "signed: poppler-qt6 or libqpdf is missing, run $REPO_DIR/bootstrap.sh 10"
   (
-    trap 'git -C "$dir" checkout --quiet -- src/stamper.cpp' EXIT
+    trap 'git -C "$dir" checkout --quiet -- src/stamper.cpp src/signer.cpp' EXIT
     if ! pkg-config --atleast-version=12 libqpdf; then
       sed -i 's/^    const auto rotate = page.getAttribute(/    auto rotate = page.getAttribute(/' "$dir/src/stamper.cpp"
       grep -q '^    auto rotate = page.getAttribute(' "$dir/src/stamper.cpp" ||
         die "signed: src/stamper.cpp no longer matches the qpdf 11 adjustment"
+    fi
+    # PDFConverter::lastSigningResult came with poppler 25.08; before it, a
+    # lost signature gets one generic message instead of its reason.
+    if ! pkg-config --atleast-version=25.08 poppler-qt6; then
+      git -C "$dir" apply "$REPO_DIR/patches/apps/signed-poppler-without-signing-result.patch" ||
+        die "signed: src/signer.cpp no longer matches the poppler 24 adjustment"
     fi
     PKG_CONFIG_PATH="$QT_DIR/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}" build_qmake signed CONFIG+=c++20
   ) || exit 1
