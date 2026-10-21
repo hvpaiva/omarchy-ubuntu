@@ -92,9 +92,11 @@ from the series under `patches/` (applied on the tag it was cut on, then
 rebased onto the tag the channel pins), runs the new migrations (`lib/migrations.sh` names the Arch-only ones it marks done
 instead), reapplies the root-side pieces if upstream changed them, installs
 every user unit upstream ships (minus `lib/units.sh`'s skip list) and restarts
-the shell. `-y` asks nothing, as upstream's `omarchy-update -y`. Bump
-`versions.env` and rerun the matching `bootstrap.sh` step when Omarchy raises
-its Quickshell or app requirements.
+the shell. `-y` asks nothing, as upstream's `omarchy-update -y`. Before the
+migrations it brings the pinned tools up to their pins, as upstream's update
+brings every package to the ring's version first: the `.deb` tools as root
+when one is behind, Qt, Quickshell, the companion apps and the fonts as the
+user (`OMARCHY_UPDATE_TOOLS=0` leaves them to you).
 
 ### Channels
 

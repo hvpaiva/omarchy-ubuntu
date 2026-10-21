@@ -303,7 +303,7 @@ declare -A ring_package=(
   [VOXTYPE]=voxtype-bin [LOCALSEND]=localsend [QUICKSHELL]=quickshell
 )
 declare -A mirror_package=(
-  [QT]=qt6-base [GUM]=gum [FASTFETCH]=fastfetch [HYPRPICKER]=hyprpicker [XDG_TERMINAL_EXEC]=xdg-terminal-exec
+  [QT]=qt6-base [GUM]=gum [FASTFETCH]=fastfetch [GHOSTTY]=ghostty [MISE]=mise [HYPRPICKER]=hyprpicker [XDG_TERMINAL_EXEC]=xdg-terminal-exec
   [GSR]=gpu-screen-recorder [GTK4_LAYER_SHELL]=gtk4-layer-shell [NERD_FONTS]=ttf-jetbrains-mono-nerd
 )
 matched=0
