@@ -55,7 +55,9 @@ if ! have hyprpicker; then
   quietly cmake --install "$SRC_DIR/hyprpicker/build"
 fi
 
-cargo_app tensaku https://github.com/omacom-io/tensaku "$TENSAKU_VERSION" --features ci-release
+# tensaku's source lives with its author now (omarchy-pkgs builds the Arch package
+# from there); the omacom-io repository is gone, not redirected.
+cargo_app tensaku https://github.com/jondkinney/tensaku "$TENSAKU_VERSION" --features ci-release
 install -m 0755 "$SRC_DIR/tensaku/target/release/tensaku-edit" "$LOCAL_BIN/tensaku-edit" 2>/dev/null || true
 
 cargo_app ttfx https://github.com/omacom-io/ttfx "$TTFX_VERSION"
