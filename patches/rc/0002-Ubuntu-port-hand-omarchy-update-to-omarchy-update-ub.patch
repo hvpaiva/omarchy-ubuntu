@@ -1,0 +1,35 @@
+From 6de5c1f51554a44150afa6f898c98c516cc58980 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Tue, 22 Sep 2026 20:30:18 -0300
+Subject: [PATCH 02/11] Ubuntu port: hand omarchy-update to
+ omarchy-update-ubuntu when pacman is absent
+
+Every step of omarchy-update after the lock is pacman (prune, keyring,
+system packages, AUR, orphans, snapshot). The port keeps its updater
+outside the checkout (a rebase in the middle of a running script would
+corrupt it), so omarchy-update only execs it when it is on PATH and
+there is no pacman.
+---
+ bin/omarchy-update | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/bin/omarchy-update b/bin/omarchy-update
+index 12ed41ce..126089f8 100755
+--- a/bin/omarchy-update
++++ b/bin/omarchy-update
+@@ -15,6 +15,12 @@ security_entrypoint=$(/usr/bin/readlink -e -- "${BASH_SOURCE[0]}") || exit 126
+ source "${security_entrypoint%/*}/omarchy-security-functions" || exit 126
+ omarchy_security_require_privileged_bash_startup || exit 126
+ set -e
++# Ubuntu port: everything below is pacman. The port's updater (git tag on the
++# ubuntu branch, reviewed migrations, out-of-checkout pieces) takes over, on
++# the caller's PATH, before the sudo preamble narrows it to the package's.
++if ! command -v pacman &>/dev/null && command -v omarchy-update-ubuntu &>/dev/null; then
++  exec omarchy-update-ubuntu "$@"
++fi
+ omarchy_security_sanitize_bash_environment "$0" "$@"
+ omarchy_security_require_source_root "$0"
+ # Logging and lock acquisition re-exec this command with a sanitized PATH.
+-- 
+2.55.0
+

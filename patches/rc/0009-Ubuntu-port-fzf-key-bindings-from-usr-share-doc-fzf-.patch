@@ -1,0 +1,31 @@
+From 8636969807ffd7b176e8a4f626e0fa763f79f9b1 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Mon, 28 Sep 2026 00:37:13 -0300
+Subject: [PATCH 09/11] Ubuntu port: fzf key bindings from
+ /usr/share/doc/fzf/examples
+
+Ubuntu's fzf package ships key-bindings.bash in /usr/share/doc/fzf/examples
+instead of /usr/share/fzf, and no completion.bash at all (completion comes
+through bash-completion). The source sits after upstream's block rather than
+rewriting it, so upstream can change its own lines without a conflict.
+---
+ default/bash/init | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/default/bash/init b/default/bash/init
+index d172f845..cab70461 100644
+--- a/default/bash/init
++++ b/default/bash/init
+@@ -24,6 +24,9 @@ if command -v fzf &> /dev/null; then
+   if [[ -f /usr/share/fzf/key-bindings.bash ]]; then
+     source /usr/share/fzf/key-bindings.bash
+   fi
++  if [[ -f /usr/share/doc/fzf/examples/key-bindings.bash ]]; then
++    source /usr/share/doc/fzf/examples/key-bindings.bash
++  fi
+ fi
+ 
+ source "$OMARCHY_PATH/default/bash/completions"
+-- 
+2.55.0
+
