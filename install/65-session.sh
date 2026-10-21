@@ -41,8 +41,13 @@ while IFS= read -r u; do
   rewrite_unit "$units_src/$u" "$units_dst/$u"
 done < <(omarchy_units "$units_src")
 systemctl --user daemon-reload
-systemctl --user enable bt-agent.service omarchy-recover-internal-monitor.service omarchy-sleep-lock.service \
-  omarchy-migrate-notify.service omarchy-fcitx5.service omarchy-crash-watch.service omarchy-tailscale-receive.service >/dev/null 2>&1
+# One at a time, as upstream's first-run does: a unit this tag lacks (owed
+# before 4.5) must not cost the session the others.
+for u in bt-agent.service owed.service omarchy-recover-internal-monitor.service omarchy-sleep-lock.service \
+  omarchy-migrate-notify.service omarchy-fcitx5.service omarchy-crash-watch.service omarchy-tailscale-receive.service; do
+  [[ -f $units_dst/$u ]] || continue
+  systemctl --user enable "$u" >/dev/null 2>&1 || warn "could not enable $u"
+done
 
 log "migrations: mark everything shipped with this tag as done (a fresh install's state)"
 # Otherwise omarchy-migrate would run every migration ever shipped, several of
@@ -51,6 +56,8 @@ mkdir -p "$OMARCHY_HOME/.local/state/omarchy/migrations"
 for m in "$OMARCHY_PATH"/migrations/*.sh; do
   touch "$OMARCHY_HOME/.local/state/omarchy/migrations/$(basename "$m")"
 done
+# The port's own (migrations/) are left to the first update: each gates itself
+# on the tag the checkout is at, and a stable install carries what they undo.
 
 log "first-run provisioning (hooks, GNOME theme, welcome and update notifications)"
 if [[ -n ${WAYLAND_DISPLAY:-} ]]; then

@@ -58,10 +58,14 @@ if ! want "$LOCAL_BIN/hyprpicker" "$HYPRPICKER_VERSION"; then
   quietly cmake --install "$SRC_DIR/hyprpicker/build"
 fi
 
-# tensaku's source lives with its author now (omarchy-pkgs builds the Arch package
+# tensaku while upstream's base ships it; omasnap takes over in 4.5, and the
+# migration that does so drops this build through omarchy-pkg-ubuntu's recipe.
+# Its source lives with its author now (omarchy-pkgs builds the Arch package
 # from there); the omacom-io repository is gone, not redirected.
-cargo_app tensaku https://github.com/jondkinney/tensaku "$TENSAKU_VERSION" --features ci-release
-install -m 0755 "$SRC_DIR/tensaku/target/release/tensaku-edit" "$LOCAL_BIN/tensaku-edit" 2>/dev/null || true
+if grep -qx tensaku "$OMARCHY_PATH/install/omarchy-base.packages"; then
+  cargo_app tensaku https://github.com/jondkinney/tensaku "$TENSAKU_VERSION" --features ci-release
+  install -m 0755 "$SRC_DIR/tensaku/target/release/tensaku-edit" "$LOCAL_BIN/tensaku-edit" 2>/dev/null || true
+fi
 
 cargo_app ttfx https://github.com/omacom-io/ttfx "$TTFX_VERSION"
 
@@ -98,6 +102,12 @@ if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION"; then
   note "gsr-kms-server gets cap_sys_admin in install/55-root.sh"
 fi
 
-"$REPO_DIR/bin/omarchy-build-qt-apps"
-# The companion apps the menu or a migration installed follow their pins too.
+# The companion apps upstream's base lists at this tag, from source; the
+# others stay on demand through omarchy-pkg-ubuntu's recipes, and the ones
+# already on the machine follow their pins.
+apps=()
+for app in omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
+  grep -qx "$app" "$OMARCHY_PATH/install/omarchy-base.packages" && apps+=("$app")
+done
+"$REPO_DIR/bin/omarchy-build-app" "${apps[@]}"
 "$REPO_DIR/bin/omarchy-build-app" --installed

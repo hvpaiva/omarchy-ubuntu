@@ -17,6 +17,22 @@ visudo -cf "$staged" >/dev/null
 install_file 440 /etc/sudoers.d/omarchy-theme-browser <"$staged"
 rm -f "$staged"
 
+# omarchy-language (4.5) elevates through /usr/bin/omarchy-locale-generate the
+# same way; its rule names every language code, so the copy and the rule move
+# together.
+if [[ -f $OMARCHY_PATH/etc/sudoers.d/omarchy-locale-generate ]]; then
+  log "packaged copy of the locale helper and its sudoers rule (%wheel -> %sudo)"
+  install -m 0755 -o root -g root -T "$OMARCHY_PATH/bin/omarchy-locale-generate" /usr/bin/omarchy-locale-generate
+  staged=$(mktemp)
+  sed 's/^%wheel /%sudo /' "$OMARCHY_PATH/etc/sudoers.d/omarchy-locale-generate" >"$staged"
+  visudo -cf "$staged" >/dev/null
+  install_file 440 /etc/sudoers.d/omarchy-locale-generate <"$staged"
+  rm -f "$staged"
+elif [[ -e /usr/bin/omarchy-locale-generate || -e /etc/sudoers.d/omarchy-locale-generate ]]; then
+  log "locale helper and its sudoers rule: not at this tag; removed"
+  rm -f /usr/bin/omarchy-locale-generate /etc/sudoers.d/omarchy-locale-generate
+fi
+
 setup_dir() {
   local d=$1 p=""
   local IFS=/
@@ -48,3 +64,8 @@ fi
 applied=$REPO_DIR/.applied
 install -d -o "$OMARCHY_USER" -g "$OMARCHY_USER" "$applied"
 install -m 0644 -o "$OMARCHY_USER" -g "$OMARCHY_USER" "$OMARCHY_PATH/etc/sudoers.d/omarchy-theme-browser" "$applied/omarchy-theme-browser"
+if [[ -f $OMARCHY_PATH/etc/sudoers.d/omarchy-locale-generate ]]; then
+  install -m 0644 -o "$OMARCHY_USER" -g "$OMARCHY_USER" "$OMARCHY_PATH/etc/sudoers.d/omarchy-locale-generate" "$applied/omarchy-locale-generate"
+else
+  rm -f "$applied/omarchy-locale-generate"
+fi
