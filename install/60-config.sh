@@ -24,10 +24,9 @@ for f in hyprland autostart; do
   fi
 done
 # The rest is personal: seeded from upstream's stubs only when absent.
-for f in bindings input looknfeel; do
+for f in bindings input looknfeel monitors; do
   [[ -f $cfg/hypr/$f.lua ]] || install -m 0644 "$OMARCHY_PATH/config/hypr/$f.lua" "$cfg/hypr/$f.lua"
 done
-[[ -f $cfg/hypr/monitors.lua ]] || install -m 0644 "$REPO_DIR/config/hypr/monitors.lua.example" "$cfg/hypr/monitors.lua"
 for f in xdph.conf hyprsunset.conf; do
   if [[ ! -f $cfg/hypr/$f ]]; then
     install -m 0644 "$OMARCHY_PATH/config/hypr/$f" "$cfg/hypr/$f"
