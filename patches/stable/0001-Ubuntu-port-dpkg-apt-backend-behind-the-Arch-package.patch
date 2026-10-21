@@ -1,4 +1,4 @@
-From 95bc73e3649852a933a1ec857f0181a9a5a23b84 Mon Sep 17 00:00:00 2001
+From 84facdef6198302aef45cf642a18f68bc54668c6 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -185,7 +185,7 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..11847a65
+index 00000000..b8eee71e
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
 @@ -0,0 +1,899 @@
@@ -394,12 +394,12 @@ index 00000000..11847a65
 +
 +apt_candidate() {
 +  local candidate
-+  candidate=$(apt-cache policy "$1" 2>/dev/null | awk '/^  Candidate:/ { print $2 }')
++  candidate=$(apt-cache policy -- "$1" 2>/dev/null | awk '/^  Candidate:/ { print $2 }')
 +  [[ -n $candidate && $candidate != "(none)" ]]
 +}
 +
 +dpkg_installed() {
-+  [[ $(dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null) == ?i* ]]
++  [[ $(dpkg-query -W -f='${db:Status-Abbrev}' -- "$1" 2>/dev/null) == ?i* ]]
 +}
 +
 +dpkg_provided() {
@@ -456,7 +456,7 @@ index 00000000..11847a65
 +  for deb in "$@"; do
 +    debs+=("./$deb")
 +  done
-+  as_root apt-get install -y "${debs[@]}"
++  as_root apt-get install -y -- "${debs[@]}"
 +}
 +
 +keyring_path() {
@@ -654,7 +654,7 @@ index 00000000..11847a65
 +install_flatpak() {
 +  flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null ||
 +    as_root flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-+  flatpak install -y --noninteractive flathub "$1"
++  flatpak install -y --noninteractive -- flathub "$1"
 +}
 +
 +install_mise() {
@@ -688,7 +688,7 @@ index 00000000..11847a65
 +}
 +
 +install_i386() {
-+  enable_i386 && as_root apt-get install -y "$1:i386"
++  enable_i386 && as_root apt-get install -y -- "$1:i386"
 +}
 +
 +nvidia_gl_package() {
@@ -712,7 +712,7 @@ index 00000000..11847a65
 +remove_custom_nvidia_i386() {
 +  local package
 +  package=$(nvidia_gl_package)
-+  [[ -z $package ]] || as_root apt-get purge -y "$package:i386"
++  [[ -z $package ]] || as_root apt-get purge -y -- "$package:i386"
 +}
 +
 +install_custom_steam() {
@@ -726,7 +726,7 @@ index 00000000..11847a65
 +remove_custom_steam() {
 +  local package
 +  for package in steam-installer steam-launcher; do
-+    dpkg_installed "$package" && as_root apt-get purge -y --autoremove "$package"
++    dpkg_installed "$package" && as_root apt-get purge -y --autoremove -- "$package"
 +  done
 +  return 0
 +}
@@ -866,8 +866,8 @@ index 00000000..11847a65
 +  repo) dpkg_installed "$2" ;;
 +  pool | deb) dpkg_installed "$1" ;;
 +  opr) [[ -s $(opr_manifest "$1") ]] ;;
-+  flatpak) flatpak info "$1" &>/dev/null ;;
-+  mise) command -v "$2" &>/dev/null ;;
++  flatpak) flatpak info -- "$1" &>/dev/null ;;
++  mise) command -v -- "$2" &>/dev/null ;;
 +  nerdfont) fc-list : family | grep -iE "^$2[^,]* Nerd Font" >/dev/null ;;
 +  i386) dpkg_installed "$1:i386" ;;
 +  custom) "installed_custom_${1//-/_}" ;;
@@ -903,7 +903,7 @@ index 00000000..11847a65
 +    dpkg_installed "$package" && installed+=("$package")
 +  done
 +  if (( ${#installed[@]} > 0 )); then
-+    as_root apt-get purge -y --autoremove "${installed[@]}"
++    as_root apt-get purge -y --autoremove -- "${installed[@]}"
 +  fi
 +}
 +
@@ -914,14 +914,14 @@ index 00000000..11847a65
 +  repo) shift && purge_installed "$@" ;;
 +  pool | deb) purge_installed "$1" ;;
 +  opr) remove_opr "$1" ;;
-+  flatpak) flatpak info "$1" &>/dev/null && flatpak uninstall -y --noninteractive "$1" ;;
++  flatpak) flatpak info -- "$1" &>/dev/null && flatpak uninstall -y --noninteractive -- "$1" ;;
 +  mise)
 +    rm -f "$HOME/.local/bin/$2"
 +    mise rm -g "$1" &>/dev/null
 +    mise uninstall --all "$1" &>/dev/null
 +    ;;
 +  nerdfont) rm -rf "$(nerdfont_dir "$1")" && fc-cache -f >/dev/null ;;
-+  i386) dpkg_installed "$1:i386" && as_root apt-get purge -y "$1:i386" ;;
++  i386) dpkg_installed "$1:i386" && as_root apt-get purge -y -- "$1:i386" ;;
 +  custom) "remove_custom_${1//-/_}" ;;
 +  libretro) as_root rm -f "$(libretro_core_path "$1")" ;;
 +  libretro-assets) remove_libretro_assets "$@" ;;
@@ -938,9 +938,9 @@ index 00000000..11847a65
 +  for name in $(apt_names "$pkg"); do
 +    dpkg_installed "$name" && return 0
 +    dpkg_provided "$name" && return 0
-+    snap list "$name" &>/dev/null && return 0
++    snap list -- "$name" &>/dev/null && return 0
 +    flatpak list --app --columns=application 2>/dev/null | grep -i -- "${name//-/_}" >/dev/null && return 0
-+    command -v "$name" &>/dev/null && return 0
++    command -v -- "$name" &>/dev/null && return 0
 +  done
 +  return 1
 +}
@@ -969,7 +969,7 @@ index 00000000..11847a65
 +  done
 +
 +  if (( ${#apt_pkgs[@]} > 0 )); then
-+    as_root apt-get install -y "${apt_pkgs[@]}" || return 1
++    as_root apt-get install -y -- "${apt_pkgs[@]}" || return 1
 +  fi
 +  for recipe in "${recipes[@]}"; do
 +    with_recipe recipe_install "$recipe" || return 1
@@ -991,7 +991,7 @@ index 00000000..11847a65
 +        debs+=("$name")
 +        selected[$name]=1
 +        break
-+      elif snap list "$name" &>/dev/null; then
++      elif snap list -- "$name" &>/dev/null; then
 +        snaps+=("$name")
 +        selected[$name]=1
 +        break
@@ -1000,10 +1000,10 @@ index 00000000..11847a65
 +  done
 +
 +  if (( ${#debs[@]} > 0 )); then
-+    as_root apt-get purge -y --autoremove "${debs[@]}"
++    as_root apt-get purge -y --autoremove -- "${debs[@]}"
 +  fi
 +  if (( ${#snaps[@]} > 0 )); then
-+    as_root snap remove "${snaps[@]}"
++    as_root snap remove -- "${snaps[@]}"
 +  fi
 +  return 0
 +}
@@ -1029,7 +1029,7 @@ index 00000000..11847a65
 +fzf_pick() {
 +  local colour=$1
 +  fzf --multi \
-+    --preview 'apt-cache show {1} | sed -n "1,/^$/p"' \
++    --preview 'apt-cache show -- {1} | sed -n "1,/^$/p"' \
 +    --preview-label='alt-p: toggle description, alt-j/k: scroll, tab: multi-select' \
 +    --preview-label-pos='bottom' \
 +    --preview-window 'down:65%:wrap' \
@@ -1045,7 +1045,7 @@ index 00000000..11847a65
 +  [[ -n $names ]] || return 0
 +  source omarchy-sudo-keepalive
 +  # shellcheck disable=SC2086
-+  sudo apt-get install -y $names
++  sudo apt-get install -y -- $names
 +  omarchy-show-done
 +}
 +
@@ -1054,7 +1054,7 @@ index 00000000..11847a65
 +  names=$(apt-mark showmanual | sort | fzf_pick red)
 +  [[ -n $names ]] || return 0
 +  # shellcheck disable=SC2086
-+  sudo apt-get purge -y --autoremove $names
++  sudo apt-get purge -y --autoremove -- $names
 +  omarchy-show-done
 +}
 +
