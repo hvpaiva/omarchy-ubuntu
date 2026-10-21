@@ -1,4 +1,4 @@
-From c2ab666e664e8f64b3e7b841cdeab00f8fc8e22d Mon Sep 17 00:00:00 2001
+From 95bc73e3649852a933a1ec857f0181a9a5a23b84 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -44,7 +44,7 @@ index 2a7e547c..8ff9e4e1 100755
  printf -v desktop_id_arg '%q' "$desktop_id"
  
 diff --git a/bin/omarchy-pkg-add b/bin/omarchy-pkg-add
-index 977d7efd..498ec743 100755
+index 1f5e4091..883fce62 100755
 --- a/bin/omarchy-pkg-add
 +++ b/bin/omarchy-pkg-add
 @@ -5,6 +5,9 @@
@@ -56,9 +56,9 @@ index 977d7efd..498ec743 100755
 +
  if omarchy-pkg-missing "$@"; then
    if (( EUID == 0 )); then
-     pacman -S --noconfirm --needed "$@" || exit 1
+     pacman -S --noconfirm --needed -- "$@" || exit 1
 diff --git a/bin/omarchy-pkg-aur-add b/bin/omarchy-pkg-aur-add
-index 7a152be7..09b0e8c5 100755
+index 64ad097c..483e4d39 100755
 --- a/bin/omarchy-pkg-aur-add
 +++ b/bin/omarchy-pkg-aur-add
 @@ -3,6 +3,10 @@
@@ -70,7 +70,7 @@ index 7a152be7..09b0e8c5 100755
 +fi
 +
  if omarchy-pkg-missing "$@"; then
-   yay -S --noconfirm --needed "$@" || exit 1
+   yay -S --noconfirm --needed -- "$@" || exit 1
  fi
 diff --git a/bin/omarchy-pkg-aur-install b/bin/omarchy-pkg-aur-install
 index 3d38b4db..0539064d 100755
@@ -142,7 +142,7 @@ index 00000000..ade38988
 +
 +exec omarchy-pkg-ubuntu installed "$pkg"
 diff --git a/bin/omarchy-pkg-missing b/bin/omarchy-pkg-missing
-index c4059dff..3c2188a7 100755
+index b282d2f3..ac39e852 100755
 --- a/bin/omarchy-pkg-missing
 +++ b/bin/omarchy-pkg-missing
 @@ -3,6 +3,9 @@
@@ -153,10 +153,10 @@ index c4059dff..3c2188a7 100755
 +command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu missing "$@"
 +
  for pkg in "$@"; do
-   if ! pacman -Q "$pkg" &>/dev/null; then
+   if ! pacman -Q -- "$pkg" &>/dev/null; then
      exit 0
 diff --git a/bin/omarchy-pkg-present b/bin/omarchy-pkg-present
-index 8c4340d6..3ebabdc1 100755
+index 0a0645bd..bfc543a7 100755
 --- a/bin/omarchy-pkg-present
 +++ b/bin/omarchy-pkg-present
 @@ -3,6 +3,9 @@
@@ -167,7 +167,7 @@ index 8c4340d6..3ebabdc1 100755
 +command -v pacman &>/dev/null || exec omarchy-pkg-ubuntu present "$@"
 +
  for pkg in "$@"; do
-   pacman -Q "$pkg" &>/dev/null || exit 1
+   pacman -Q -- "$pkg" &>/dev/null || exit 1
  done
 diff --git a/bin/omarchy-pkg-remove b/bin/omarchy-pkg-remove
 index 486d3772..960ae735 100755
