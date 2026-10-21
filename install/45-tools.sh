@@ -2,8 +2,8 @@
 # Everything else Omarchy expects on PATH that Ubuntu 24.04 does not package,
 # built from source into ~/.local (or /usr/local for the two libraries below).
 #   tensaku (screenshot editor), ttfx (screensaver), cliamp (music TUI),
-#   herdr (agent workspace), aether (theming app), hyprland-preview-share-picker,
-#   gpu-screen-recorder, gtk4-layer-shell, xdg-terminal-exec, hyprpicker.
+#   herdr (agent workspace), hyprland-preview-share-picker, gpu-screen-recorder,
+#   gtk4-layer-shell, xdg-terminal-exec, hyprpicker.
 source "${REPO_DIR:?}/lib/common.sh"
 need_user
 
@@ -73,16 +73,12 @@ fi
 
 cargo_app hyprland-preview-share-picker https://github.com/WhySoBad/hyprland-preview-share-picker "$SHARE_PICKER_VERSION"
 
-if [[ ! -x $LOCAL_BIN/aether ]] || ! git -C "$SRC_DIR/aether" describe --tags 2>/dev/null | grep -q "$AETHER_VERSION"; then
-  log "aether $AETHER_VERSION (Wails, webkit2gtk 4.1)"
-  git_checkout "$SRC_DIR/aether" https://github.com/omacom/aether "$AETHER_VERSION"
-  (cd "$SRC_DIR/aether" && PATH="$(go env GOPATH)/bin:$PATH" wails build -tags webkit2_41 2>&1 | tail -1)
-  install -m 0755 "$SRC_DIR/aether/build/bin/aether" "$LOCAL_BIN/aether"
-  install -Dm644 "$SRC_DIR/aether/li.oever.aether.desktop" "$OMARCHY_HOME/.local/share/applications/li.oever.aether.desktop"
-  install -Dm644 "$SRC_DIR/aether/li.oever.aether.url-handler.desktop" "$OMARCHY_HOME/.local/share/applications/li.oever.aether.url-handler.desktop"
-  install -Dm644 "$SRC_DIR/aether/assets/aether-icon-512.png" "$OMARCHY_HOME/.local/share/icons/hicolor/512x512/apps/aether.png"
-  xdg-mime default li.oever.aether.url-handler.desktop x-scheme-handler/aether 2>/dev/null || true
-fi
+# Aether came from a Wails build here until step 15 took its release .deb; the
+# ~/.local copy would shadow /usr/bin/aether and double its launcher.
+rm -f "$LOCAL_BIN/aether" "$OMARCHY_HOME/.local/share/applications/li.oever.aether.desktop" \
+  "$OMARCHY_HOME/.local/share/applications/li.oever.aether.url-handler.desktop" \
+  "$OMARCHY_HOME/.local/share/icons/hicolor/512x512/apps/aether.png"
+rm -rf "$SRC_DIR/aether"
 
 if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION"; then
   log "gpu-screen-recorder $GSR_VERSION (meson)"
