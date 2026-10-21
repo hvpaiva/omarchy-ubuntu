@@ -21,3 +21,8 @@ log "Qt $QT_VERSION ($QT_ARCHIVES)"
 # shellcheck disable=SC2086
 aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 -m $QT_MODULES --archives $QT_ARCHIVES -O "$OMARCHY_HOME/.local/opt/Qt"
 "$QT_DIR/bin/qmake6" -query QT_VERSION
+# An older tree stays until Quickshell and the apps have been rebuilt on this
+# one (steps 40 and 45 do that on their own, reading the version they link).
+for other in "$OMARCHY_HOME"/.local/opt/Qt/[0-9]*/; do
+  [[ $other == "$OMARCHY_HOME/.local/opt/Qt/$QT_VERSION/" ]] || note "older Qt in $other: remove it once bootstrap.sh 40 45 has rebuilt against $QT_VERSION"
+done
