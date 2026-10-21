@@ -17,6 +17,10 @@ install_deb() { # install_deb <name> <github repo> <tag> <asset>
 # gum: the TUI toolkit every omarchy-* prompt uses.
 install_deb gum charmbracelet/gum "v$GUM_VERSION" "gum_${GUM_VERSION}_amd64.deb"
 
+# fastfetch: Omarchy's system summary. Noble has no package; the release .deb
+# is the version Arch's snapshot carries.
+install_deb fastfetch fastfetch-cli/fastfetch "$FASTFETCH_VERSION" fastfetch-linux-amd64.deb
+
 # LocalSend: Super+Ctrl+S share menu (`localsend --headless send`). The .deb only
 # installs /opt/localsend_app/localsend_app; the Arch package puts `localsend` on PATH.
 install_deb localsend localsend/localsend "v$LOCALSEND_VERSION" "LocalSend-${LOCALSEND_VERSION}-linux-x86-64.deb"

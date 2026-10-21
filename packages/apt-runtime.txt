@@ -89,13 +89,13 @@ fcitx5-hangul
 fcitx5-chinese-addons
 fcitx5-chewing
 
-# Apps the default bindings reach for
+# Apps the default bindings reach for (fastfetch comes from its release .deb,
+# see install/15-extra-debs-root.sh: noble has no package)
 nautilus
 python3-nautilus
 mpv
 mpv-mpris
 imv
 btop
-fastfetch
 cava
 tmux
