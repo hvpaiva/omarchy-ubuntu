@@ -11,7 +11,7 @@
 o.exec_on_start(
   "sleep 3 && systemctl --user start bt-agent.service omarchy-sleep-lock.service omarchy-crash-watch.service"
     .. " omarchy-recover-internal-monitor.service omarchy-tailscale-receive.service omarchy-migrate-notify.service"
-    .. " voxtype.service"
+    .. " voxtype.service owed.service"
 )
 
 -- o.launch_on_start("my-service")

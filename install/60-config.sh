@@ -61,6 +61,27 @@ if ! grep -q wayland-diagnose-other "$cfg/fcitx5/conf/notifications.conf" 2>/dev
   printf '# Hidden Notifications\n[HiddenNotifications]\n0=wayland-diagnose-other\n' >"$cfg/fcitx5/conf/notifications.conf"
   [[ $fcitx_was_active == active ]] && systemctl --user start omarchy-fcitx5.service >/dev/null 2>&1 || true
 fi
+# 4.5: upstream's input-method setup seeds fcitx5's profile (the CJK methods,
+# the compose key), a VM starts without animations or transparency, the
+# portal config and Chromium's native messaging hosts come from the user setup.
+if [[ -x $OMARCHY_PATH/bin/omarchy-input-method ]]; then
+  omarchy-input-method configure --seed >/dev/null 2>&1 || warn "omarchy-input-method configure --seed failed"
+fi
+if [[ -x $OMARCHY_PATH/bin/omarchy-hw-vm ]] && omarchy-hw-vm && [[ ! -d $OMARCHY_HOME/.local/state/omarchy/toggles/hypr ]]; then
+  mkdir -p "$OMARCHY_HOME/.local/state/omarchy/toggles/hypr"
+  cp "$OMARCHY_PATH"/default/hypr/toggles/{no-animations,window-opaque}.lua "$OMARCHY_HOME/.local/state/omarchy/toggles/hypr/"
+fi
+# Seeded once, as upstream's 1788261467 does: a portals.conf of the user's wins.
+portals=$cfg/xdg-desktop-portal
+if [[ -f $OMARCHY_PATH/config/xdg-desktop-portal/hyprland-portals.conf &&
+  ! -e $portals/hyprland-portals.conf && ! -L $portals/hyprland-portals.conf &&
+  ! -e $portals/portals.conf && ! -L $portals/portals.conf ]]; then
+  install -Dm644 "$OMARCHY_PATH/config/xdg-desktop-portal/hyprland-portals.conf" "$portals/hyprland-portals.conf"
+fi
+for host in omarchy-install-chromium-copy-url omarchy-install-chromium-ytdlp; do
+  [[ -x $OMARCHY_PATH/bin/$host ]] || continue
+  "$host" >/dev/null 2>&1 || warn "$host failed"
+done
 mkdir -p "$cfg/hyprland-preview-share-picker"
 [[ -f $cfg/hyprland-preview-share-picker/config.yaml ]] || cp "$OMARCHY_PATH/config/hyprland-preview-share-picker/config.yaml" "$cfg/hyprland-preview-share-picker/"
 sed -i "s#^  command: slurp -f .*#  command: omarchy-share-picker-region#" "$cfg/hyprland-preview-share-picker/config.yaml"
@@ -113,3 +134,13 @@ if [[ ! -f $OMARCHY_HOME/.local/state/omarchy/current/theme.name ]]; then
   OMARCHY_THEME_HEADLESS=1 omarchy-theme-set "$theme"
 fi
 note "theme $(cat "$OMARCHY_HOME/.local/state/omarchy/current/theme.name")"
+# 4.5: fcitx5's profile pointed at Omarchy's theme (upstream's install/user/theme.sh;
+# 4.0.6's omarchy-theme-set-fcitx5 has no --activate).
+if grep -qs -- '--activate' "$OMARCHY_PATH/bin/omarchy-theme-set-fcitx5"; then
+  omarchy-theme-set-fcitx5 --activate >/dev/null 2>&1 || warn "omarchy-theme-set-fcitx5 --activate failed"
+fi
+# The lazy shims for what /etc/mise/conf.d declares, step 57's (upstream's install/user/mise.sh).
+if [[ -f /etc/mise/conf.d/omarchy-tools.toml && -x $LOCAL_BIN/mise ]]; then
+  "$LOCAL_BIN/mise" reshim --system >/dev/null 2>&1 || warn "mise reshim --system failed"
+  "$LOCAL_BIN/mise" reshim >/dev/null 2>&1 || true
+fi

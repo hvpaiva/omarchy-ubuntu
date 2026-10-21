@@ -23,8 +23,16 @@ upstream_files=(
   etc/NetworkManager/conf.d/omarchy-wifi-powersave.conf
   etc/sysctl.d/90-omarchy-file-watchers.conf
   etc/sysctl.d/99-omarchy-sysctl.conf
+  etc/sysctl.d/90-omarchy-arp.conf
   etc/modprobe.d/omarchy-usb-autosuspend.conf
   etc/udev/rules.d/60-omarchy-io-scheduler.rules
+  etc/systemd/system.conf.d/20-mount-events.conf
+  etc/systemd/system/proc-sys-fs-binfmt_misc.mount.d/10-omarchy-conditions.conf
+  etc/systemd/system/systemd-binfmt.service.d/10-eager-mount.conf
+  etc/systemd/user/wayland-wm@hyprland.desktop.service.d/10-keep-shell.conf
+  etc/xkb/rules/evdev
+  etc/xkb/symbols/omarchy
+  etc/mpv/mpv.conf
   etc/sudoers.d/omarchy-passwd-tries
   etc/sudoers.d/omarchy-tzupdate
   etc/sudoers.d/omarchy-dns
@@ -33,6 +41,7 @@ upstream_files=(
   etc/fastfetch/config.jsonc
   etc/mise/conf.d/omarchy.toml
   etc/mise/conf.d/omarchy-agent-accounts.toml
+  etc/mise/conf.d/omarchy-tools.toml
   bin/omarchy-dns
 )
 # Upstream etc/ files this step leaves alone, each with its reason. Anything
@@ -48,6 +57,8 @@ skipped_files=(
   etc/mkinitcpio.conf.d/omarchy_hooks.conf                # Arch boot stack
   etc/mkinitcpio.conf.d/thunderbolt_module.conf           # Arch boot stack
   etc/mkinitcpio.conf.d/omarchy_vconsole.conf             # Arch boot stack
+  etc/mkinitcpio.conf.d/00-omarchy-hooks.conf             # Arch boot stack
+  etc/sudoers.d/omarchy-locale-generate                   # 70-browser-policy-root.sh, with the packaged helper
   etc/nsswitch.conf                                      # Ubuntu's carries sss for the corporate login
   etc/plymouth/plymouthd.conf                             # 59 sets the theme through update-alternatives
   etc/profile.d/omarchy.sh                                # 55 writes the dev-link version
@@ -93,9 +104,33 @@ case ${1:-} in
 esac
 need_root
 
+# The manifest of the last run (rewritten at the end of this one) says which
+# files under / are the port's own copies, unedited since.
+ports_copy() { [[ -f $REPO_DIR/.applied/57-system-tweaks.sha256 ]] && (cd / && sha256sum "$1") | grep -qxF -f - "$REPO_DIR/.applied/57-system-tweaks.sha256"; }
+
+# A tag that does not ship a file (a channel switched back, a file upstream
+# dropped) takes it away as the package would on Arch: only the port's own
+# copy; what was there before the port wrote over it (a package's conffile,
+# mpv's say, or the admin's own file) comes back from the copy kept beside.
 from_upstream() {
-  [[ -f $OMARCHY_PATH/$2 ]] || { note "not yet upstream: $2"; return 0; }
-  install_file "$1" "/$2" <"$OMARCHY_PATH/$2"
+  if [[ -f $OMARCHY_PATH/$2 ]]; then
+    if [[ -f /$2 ]] && ! cmp -s "/$2" "$OMARCHY_PATH/$2" && ! ports_copy "$2"; then
+      backup_once "/$2"
+    fi
+    install_file "$1" "/$2" <"$OMARCHY_PATH/$2"
+  elif [[ -e /$2 ]]; then
+    if [[ -f /$2.bak-omarchy ]]; then
+      mv -f "/$2.bak-omarchy" "/$2"
+      note "restored  /$2 (what was there before; not at this tag)"
+    elif ports_copy "$2"; then
+      rm -f "/$2"
+      note "removed   /$2 (not at this tag)"
+    else
+      warn "kept      /$2: not the port's copy, and this tag does not ship it"
+    fi
+  else
+    note "not yet upstream: $2"
+  fi
 }
 
 log "logind: power key opens Omarchy's power menu instead of powering off"
@@ -121,20 +156,36 @@ from_upstream 644 etc/NetworkManager/conf.d/omarchy-wifi-powersave.conf
 log "kernel: inotify watches, USB autosuspend off"
 from_upstream 644 etc/sysctl.d/90-omarchy-file-watchers.conf
 from_upstream 644 etc/sysctl.d/99-omarchy-sysctl.conf
+from_upstream 644 etc/sysctl.d/90-omarchy-arp.conf
 from_upstream 644 etc/modprobe.d/omarchy-usb-autosuspend.conf
 # Kyber is a module on Ubuntu's kernel (built in on Omarchy's); modules-load runs
 # before udev's coldplug, so the scheduler exists when the rule applies.
+from_upstream 644 etc/udev/rules.d/60-omarchy-io-scheduler.rules
 if [[ -f $OMARCHY_PATH/etc/udev/rules.d/60-omarchy-io-scheduler.rules ]]; then
-  from_upstream 644 etc/udev/rules.d/60-omarchy-io-scheduler.rules
   install_file 644 /etc/modules-load.d/omarchy-kyber.conf <<'EOF'
 kyber-iosched
 EOF
+else
+  rm -f /etc/modules-load.d/omarchy-kyber.conf
 fi
 install_file 644 /etc/tmpfiles.d/omarchy-usb-autosuspend.conf <<'EOF'
 w /sys/module/usbcore/parameters/autosuspend - - - - -1
 EOF
 systemd-tmpfiles --create /etc/tmpfiles.d/omarchy-usb-autosuspend.conf >/dev/null 2>&1 || true
 sysctl -q --system >/dev/null 2>&1 || true
+
+# 4.5: mount events at boot, binfmt mounted before registration, the shell
+# kept while uwsm stops the compositor, Shift+CapsLock as the compose key
+# (the default input.lua names omarchy:shift_caps_compose, so without the xkb
+# files the keymap would not compile), mpv's hardware decoding.
+log "boot, session and input: mount events, binfmt, uwsm teardown, xkb compose, mpv"
+from_upstream 644 etc/systemd/system.conf.d/20-mount-events.conf
+from_upstream 644 etc/systemd/system/proc-sys-fs-binfmt_misc.mount.d/10-omarchy-conditions.conf
+from_upstream 644 etc/systemd/system/systemd-binfmt.service.d/10-eager-mount.conf
+from_upstream 644 etc/systemd/user/wayland-wm@hyprland.desktop.service.d/10-keep-shell.conf
+from_upstream 644 etc/xkb/rules/evdev
+from_upstream 644 etc/xkb/symbols/omarchy
+from_upstream 644 etc/mpv/mpv.conf
 
 log "sudo: more password tries, passwordless timezone and DNS toggles"
 for f in omarchy-passwd-tries omarchy-tzupdate omarchy-dns; do
@@ -168,6 +219,8 @@ from_upstream 644 etc/mise/conf.d/omarchy.toml
 # Claude, Codex and Grok dispatch through omarchy-agent-account-exec, which the
 # same checkout's bin/ provides; mise builds the wrappers on its next reshim.
 from_upstream 644 etc/mise/conf.d/omarchy-agent-accounts.toml
+# 4.5 declares the default tools as lazy shims here; step 25 reshims.
+from_upstream 644 etc/mise/conf.d/omarchy-tools.toml
 # The port's own tool versions. System level on purpose: the user's
 # ~/.config/mise/config.toml overrides any of them.
 port_mise_config | install_file 644 /etc/mise/conf.d/omarchy-ubuntu.toml

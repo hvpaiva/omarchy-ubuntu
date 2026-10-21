@@ -77,6 +77,7 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `bootstrap.sh` | runs `install/*.sh` in order; `-root.sh` steps run as root |
 | `install/` | numbered steps: apt, extra .debs, Qt, toolchains, Omarchy checkout, Quickshell, tools, user, root, config, session, browser policy, PATH |
 | `lib/` | `channel.sh` (channels, their pins and series), `migrations.sh` (what the updater does with migrations that reach for Arch), `units.sh` (user units), `common.sh` |
+| `migrations/` | the port's own migrations, run by the updater before upstream's for what its package upgrade would have done to the machine (`.applied/migrations/` records them; a `-root.sh` beside one is its root half) |
 | `versions.env` | pinned versions for everything cloned or downloaded, the Omarchy tag of each channel among them; `versions.rc.env` holds what the rc channel pins differently |
 | `patches/stable/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (apt backend behind the package helpers, update and channel hand-offs, logout without uwsm, theme and app fixes), with the tag the series was cut on in `base`; each one touches as little of upstream as it can, so the next tag rebases without conflicts. A channel whose series differs gets its own directory (`patches/rc/`). `bin/omarchy-port-series` cuts a series from a fork branch. `patches/apps/` holds what `omarchy-build-app` applies to a companion app's source when noble's libraries are behind what it was written against |
 | `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; the other Hyprland files are seeded from upstream's stubs |
@@ -89,14 +90,16 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 
 `omarchy-update-ubuntu` fast-forwards this repo, rebuilds the `ubuntu` branch
 from the series under `patches/` (applied on the tag it was cut on, then
-rebased onto the tag the channel pins), runs the new migrations (`lib/migrations.sh` names the Arch-only ones it marks done
-instead), reapplies the root-side pieces if upstream changed them, installs
-every user unit upstream ships (minus `lib/units.sh`'s skip list) and restarts
-the shell. `-y` asks nothing, as upstream's `omarchy-update -y`. Before the
-migrations it brings the pinned tools up to their pins, as upstream's update
-brings every package to the ring's version first: the `.deb` tools as root
-when one is behind, Qt, Quickshell, the companion apps and the fonts as the
-user (`OMARCHY_UPDATE_TOOLS=0` leaves them to you).
+rebased onto the tag the channel pins), then brings the machine up to it the
+way upstream's update brings every package to the ring's version before the
+migrations run: the pinned tools (the `.deb` tools as root when one is behind,
+Qt, Quickshell, the companion apps and the fonts as the user;
+`OMARCHY_UPDATE_TOOLS=0` leaves them to you), the root-side pieces if upstream
+changed them (helpers in `/usr/bin`, sudoers, system tweaks, fcitx5's glyphs)
+and every user unit upstream ships (minus `lib/units.sh`'s skip list). Then the
+port's own migrations (`migrations/`), upstream's new ones (`lib/migrations.sh`
+names the Arch-only ones it marks done instead), the post-update hooks, and the
+shell restarts. `-y` asks nothing, as upstream's `omarchy-update -y`.
 
 ### Channels
 

@@ -88,6 +88,8 @@ up_to_date() {
   if links_qt "$app"; then
     [[ $(cat "$(qt_stamp_of "$app")" 2>/dev/null) == "$QT_VERSION" ]] || return 1
   fi
+  [[ $app != omasnap || -f /usr/share/applications/omasnap.desktop ]] || return 1
+  [[ $app != owe || -f /usr/share/owe/10-owe-sync ]] || return 1
   [[ $app != omarchy-hyprland-titlebars || $(cat "$(hyprland_stamp)" 2>/dev/null) == "$(hyprland_version)" ]]
 }
 
@@ -238,6 +240,10 @@ build_omasnap() {
   cmake_build "$dir" "$dir/build" -DCMAKE_INSTALL_PREFIX="$OMARCHY_HOME/.local"
   [[ -x $dir/build/omasnap ]] || die "omasnap: no binary produced"
   quietly cmake --install "$dir/build"
+  # The launcher goes where Arch's package puts it: upstream's migration to
+  # omasnap deletes a ~/.local one, left by an installer of its own.
+  run_root /usr/bin/install -Dm644 "$APPS_DIR/omasnap.desktop" /usr/share/applications/omasnap.desktop
+  rm -f "$APPS_DIR/omasnap.desktop"
 }
 
 build_owe() {
@@ -253,7 +259,8 @@ build_owe() {
   # The package puts these under /usr; here they follow the ~/.local prefix. The
   # unit already starts %h/.local/bin/owed.
   install -Dm755 "$dir/hooks/owe-idle" "$LOCAL_BIN/owe-idle"
-  install -Dm644 "$dir/hooks/theme-set.d/10-owe-sync" "$OMARCHY_HOME/.local/share/owe/10-owe-sync"
+  # Upstream's first run installs the theme hook from /usr/share/owe by that path.
+  run_root /usr/bin/install -Dm644 "$dir/hooks/theme-set.d/10-owe-sync" /usr/share/owe/10-owe-sync
   install -Dm644 "$dir/config/config.toml" "$OMARCHY_HOME/.local/share/doc/owe/config.toml.example"
   install -Dm644 "$dir/systemd/owed.service" "$OMARCHY_HOME/.config/systemd/user/owed.service"
   systemctl --user daemon-reload 2>/dev/null || true
@@ -304,8 +311,13 @@ remove_one() {
       systemctl --user disable --now owed.service 2>/dev/null || true
       rm -f "$LOCAL_BIN/owed" "$LOCAL_BIN/owe" "$LOCAL_BIN/owe-idle" "$OMARCHY_HOME/.config/systemd/user/owed.service"
       rm -rf "$OMARCHY_HOME/.local/share/owe" "$OMARCHY_HOME/.local/share/doc/owe"
+      run_root /usr/bin/rm -rf /usr/share/owe
       ;;
     owe-lockfeed) rm -rf "$QT_DIR/qml/Owe" ;;
+    omasnap)
+      rm -f "$LOCAL_BIN/omasnap" "$ICONS_DIR/omasnap.svg"
+      run_root /usr/bin/rm -f /usr/share/applications/omasnap.desktop
+      ;;
     omarchy-hyprland-titlebars)
       run_root /usr/bin/rm -rf /usr/lib/omarchy-hyprland-titlebars
       rm -f "$(hyprland_stamp)"
