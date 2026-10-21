@@ -59,12 +59,13 @@ install_file 644 /etc/chromium.d/omarchy-user-flags <"$REPO_DIR/etc/chromium.d/o
 
 log "AppArmor profile so Chromium may use user namespaces"
 install_file 644 /etc/apparmor.d/omarchy-chromium <"$REPO_DIR/etc/apparmor.d/omarchy-chromium"
-# Loaded now where AppArmor runs; a system without it (a container) picks the
-# profile up with AppArmor, if ever.
-if have apparmor_parser; then
+# Loaded now where AppArmor runs: the parser alone is not enough, it needs the
+# kernel's side (securityfs), which a container or a kernel built without
+# AppArmor lacks. The profile then waits in /etc/apparmor.d for AppArmor, if ever.
+if have apparmor_parser && [[ -d /sys/kernel/security/apparmor ]]; then
   apparmor_parser -r /etc/apparmor.d/omarchy-chromium
 else
-  note "apparmor_parser missing: the profile is in place, not loaded"
+  note "AppArmor not running: the profile is in place, not loaded"
 fi
 
 note "chromium $(dpkg-query -W -f='${Version}' chromium)"
