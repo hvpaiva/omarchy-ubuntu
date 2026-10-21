@@ -49,7 +49,8 @@ fi
 if ! have hyprpicker; then
   log "hyprpicker $HYPRPICKER_VERSION"
   git_checkout "$SRC_DIR/hyprpicker" https://github.com/hyprwm/hyprpicker "$HYPRPICKER_VERSION"
-  quietly cmake -S "$SRC_DIR/hyprpicker" -B "$SRC_DIR/hyprpicker/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$OMARCHY_HOME/.local"
+  # C++23's <print> arrived with libstdc++ 14; noble's default g++ is 13.
+  CXX=g++-14 quietly cmake -S "$SRC_DIR/hyprpicker" -B "$SRC_DIR/hyprpicker/build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$OMARCHY_HOME/.local"
   quietly cmake --build "$SRC_DIR/hyprpicker/build" -j "$JOBS"
   quietly cmake --install "$SRC_DIR/hyprpicker/build"
 fi
