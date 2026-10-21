@@ -34,7 +34,7 @@ if [[ ! -f $compat/wayland-client-protocol.h ]]; then
 fi
 
 log "configure + build"
-cmake -S "$src" -B "$src/build" -G Ninja \
+quietly cmake -S "$src" -B "$src/build" -G Ninja \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo \
   -DCMAKE_CXX_FLAGS="-I$compat" \
   -DCMAKE_PREFIX_PATH="$QT_DIR" \
@@ -42,8 +42,8 @@ cmake -S "$src" -B "$src/build" -G Ninja \
   -DCMAKE_INSTALL_RPATH="$QT_DIR/lib" \
   -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON \
   -DDISTRIBUTOR="omarchy-ubuntu (Ubuntu 24.04, Qt $QT_VERSION via aqtinstall)" \
-  -DCRASH_HANDLER=OFF -DX11=OFF -DI3=OFF -DSERVICE_GREETD=OFF >/dev/null
+  -DCRASH_HANDLER=OFF -DX11=OFF -DI3=OFF -DSERVICE_GREETD=OFF
 ninja -C "$src/build" -j "$JOBS"
-ninja -C "$src/build" install >/dev/null
+quietly ninja -C "$src/build" install
 ln -sfn "$LOCAL_BIN/quickshell" "$LOCAL_BIN/qs"
 "$LOCAL_BIN/quickshell" --version

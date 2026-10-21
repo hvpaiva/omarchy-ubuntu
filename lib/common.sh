@@ -69,6 +69,15 @@ backup_once() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# quietly <command...>: its output only when it fails. The build tools put
+# their errors on stdout, so `>/dev/null` would leave a failed step mute.
+quietly() {
+  local out status=0
+  out=$("$@" 2>&1) || status=$?
+  (( status == 0 )) || printf '%s\n' "$out" >&2
+  return "$status"
+}
+
 # Launchpad's PPA mirrors answer 503 in bursts that outlast apt's own per-file
 # retries; a later apt-get picks up where the last one stopped, the archives
 # already fetched staying in its cache. Error-Mode=any: an index `update`
