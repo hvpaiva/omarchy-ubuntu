@@ -5,13 +5,15 @@ need_root
 
 log "Hyprland PPA (cppiber/hyprland: Hyprland >= 0.55 with Lua config, uwsm, hyprsunset, wayland-protocols >= 1.41)"
 if ! grep -rqs 'cppiber' /etc/apt/sources.list.d/; then
-  add-apt-repository -y ppa:cppiber/hyprland
+  # -n: add-apt-repository's own update shrugs off an index it could not
+  # fetch; the apt_retry update below does not.
+  add-apt-repository -y -n ppa:cppiber/hyprland
 fi
 
 # Omarchy's editor: Noble's neovim is 0.9, the config wants a current one
 log "Neovim PPA (neovim-ppa/stable)"
 if ! grep -rqs 'neovim-ppa' /etc/apt/sources.list.d/; then
-  add-apt-repository -y ppa:neovim-ppa/stable
+  add-apt-repository -y -n ppa:neovim-ppa/stable
 fi
 
 # Omarchy's base ships the 1Password app and CLI; on Ubuntu they come from 1Password's

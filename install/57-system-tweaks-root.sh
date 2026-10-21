@@ -183,7 +183,7 @@ fi
 
 log "Intel media: VA non-free driver and the oneVPL runtime (upstream's intel-media-driver, vpl-gpu-rt)"
 if lspci | grep -iE 'vga|3d|display' | grep -qi intel; then
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends intel-media-va-driver-non-free libmfx-gen1.2
+  apt_retry install -y --no-install-recommends intel-media-va-driver-non-free libmfx-gen1.2
 fi
 
 note "logind, sysctl and modprobe changes apply fully after a reboot"
