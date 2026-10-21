@@ -7,8 +7,9 @@
 # Nothing here needs root or changes the checkout, so it runs in CI as well as
 # on the machine (`omarchy-update-ubuntu` points at it before updating).
 #
-#   omarchy-upstream-check                  # pinned tag -> newest release tag
-#   omarchy-upstream-check --branch         # pinned tag -> upstream's default branch
+#   omarchy-upstream-check                  # this machine's channel: its base -> the newest ref the channel admits
+#   omarchy-upstream-check --channel rc     # another channel: its pin -> its newest
+#   omarchy-upstream-check --branch         # base -> upstream's default branch, what edge follows
 #   omarchy-upstream-check --base v4.0.3 --target v4.0.4
 #   omarchy-upstream-check --repo <dir|url> # where to read upstream from
 #
@@ -20,24 +21,31 @@
 set -uo pipefail
 
 PORT_DIR=${OMARCHY_UBUNTU_DIR:-$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
-# shellcheck source=../versions.env
-source "$PORT_DIR/versions.env"
 OMARCHY_PATH=${OMARCHY_PATH:-$HOME/.local/share/omarchy}
 
 repo=""
 base=""
 target=""
 branch=0
+channel=""
 while (( $# )); do
   case $1 in
     --repo) repo=$2; shift 2 ;;
     --base) base=$2; shift 2 ;;
     --target) target=$2; shift 2 ;;
     --branch) branch=1; shift ;;
-    -h | --help) sed -n '3,19p' "$0"; exit 0 ;;
+    --channel) channel=$2; shift 2 ;;
+    -h | --help) sed -n '3,18p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
+# An explicit channel is read as a fresh machine on it would: its pin, its
+# series. Without one, the machine's own channel and the base its checkout is on.
+[[ -z $channel ]] || OMARCHY_CHANNEL=$channel
+# shellcheck source=../lib/channel.sh
+source "$PORT_DIR/lib/channel.sh" || exit 2
+# shellcheck source=../lib/units.sh
+source "$PORT_DIR/lib/units.sh"
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -71,17 +79,20 @@ default_branch=${default_branch#origin/}
 g() { git -C "$clone" "$@"; }
 
 if [[ -z $base ]]; then
-  if [[ -d $repo ]] && git -C "$repo" show-ref --verify --quiet refs/heads/"$OMARCHY_BRANCH"; then
+  if [[ -z $channel && -d $repo ]] && git -C "$repo" show-ref --verify --quiet refs/heads/"$OMARCHY_BRANCH"; then
     base=$(git -C "$repo" describe --tags --abbrev=0 "$OMARCHY_BRANCH")
   else
-    base=$OMARCHY_TAG
+    base=$(channel_tag)
+    # edge and dev have no pin; what they bring is measured from rc's.
+    [[ -n $base ]] || base=$OMARCHY_TAG_RC
   fi
 fi
 if (( branch )); then
   target=origin/$default_branch
 elif [[ -z $target ]]; then
-  target=$(g tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -n1)
+  target=$(channel_newest "$OMARCHY_CHANNEL" "$clone")
 fi
+series=$(channel_patches)
 g rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "unknown base: $base" >&2; exit 2; }
 g rev-parse --verify --quiet "$target^{commit}" >/dev/null || { echo "unknown target: $target" >&2; exit 2; }
 
@@ -127,20 +138,23 @@ pkg_names() {
     grep -vE '^\s*(#|$)' | sed 's/\s.*//' | sort -u
 }
 
-echo "# Omarchy $base -> $target"
+echo "# Omarchy $base -> $target ($OMARCHY_CHANNEL channel)"
 echo
-echo "Port \`$(git -C "$PORT_DIR" describe --always --dirty 2>/dev/null)\`, upstream $(g rev-parse --short "$target") ($(g log -1 --format=%cs "$target")), $(g rev-list --count "$base..$target") commits since $base."
+echo "Port \`$(git -C "$PORT_DIR" describe --always --dirty 2>/dev/null)\`, series \`${series#"$PORT_DIR/"}\`, upstream $(g rev-parse --short "$target") ($(g log -1 --format=%cs "$target")), $(g rev-list --count "$base..$target") commits since $base."
 if [[ $target == origin/* ]]; then
-  newest=$(g tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -n1)
-  echo "Preview of the branch \`$default_branch\`; the newest release tag is $newest."
+  echo "Preview of the branch \`$default_branch\`; the newest release tag is $(channel_newest stable "$clone"), the newest tag of any kind $(channel_newest rc "$clone")."
 fi
 echo
 
 echo "## Patches"
 echo
-g checkout --quiet -B check "$base" 2>/dev/null
-if ! g -c user.name=port -c user.email=port@localhost am --quiet "$PORT_DIR"/patches/*.patch 2>"$work/am.err"; then
-  echo "The port's patches no longer apply on $base:"
+# The series goes on the tag it was cut on and moves to the target by rebase,
+# exactly what omarchy-update-ubuntu does on the machine.
+series_base=$(channel_series_base) || exit 2
+g rev-parse --verify --quiet "$series_base^{commit}" >/dev/null || { echo "unknown series base: $series_base" >&2; exit 2; }
+g checkout --quiet -B check "$series_base" 2>/dev/null
+if ! g -c user.name=port -c user.email=port@localhost -c commit.gpgsign=false am --quiet "$series"/*.patch 2>"$work/am.err"; then
+  echo "The port's patches no longer apply on $series_base, the tag \`${series#"$PORT_DIR/"}\` was cut on:"
   echo
   sed 's/^/    /' "$work/am.err"
   g am --abort 2>/dev/null
@@ -150,7 +164,7 @@ else
   # --onto: only the patches move. Release tags are cut on their own branch, so
   # the default branch need not contain the base and a plain rebase would
   # replay upstream's own history.
-  if g -c user.name=port -c user.email=port@localhost rebase --quiet --onto "$target" "$base" check >"$work/rebase.out" 2>&1; then
+  if g -c user.name=port -c user.email=port@localhost -c commit.gpgsign=false rebase --quiet --onto "$target" "$series_base" check >"$work/rebase.out" 2>&1; then
     echo "The $(g rev-list --count "$target..check") patches rebase cleanly onto $target."
   else
     echo "Rebase conflict in \"$(g log -1 --format=%s REBASE_HEAD 2>/dev/null)\":"
@@ -179,7 +193,7 @@ else
   done <"$work/added"
   while IFS= read -r name; do
     var=$(tr 'a-z-' 'A-Z_' <<<"$name")_VERSION
-    if grep -qE "^$var=" "$PORT_DIR/versions.env"; then
+    if grep -qE "^$var=" "$PORT_DIR"/versions.env "$PORT_DIR"/versions.rc.env 2>/dev/null; then
       echo "- removed \`$name\`: **pinned in versions.env, the port still builds or downloads it**"
     elif reason=$(classify_pkg "$name") && [[ $reason == on\ packages/* ]]; then
       echo "- removed \`$name\`: **$reason, drop it there**"
@@ -252,7 +266,6 @@ echo
 
 echo "## User units"
 echo
-# shellcheck source=../lib/common.sh
 if new_units=$(g diff --name-only --diff-filter=A "$base" "$target" -- default/systemd/user | grep '\.service$'); then
   while IFS= read -r unit; do
     if printf '%s\n' "${OMARCHY_UNITS_SKIP[@]}" | grep -qx "$(basename "$unit")"; then

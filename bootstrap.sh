@@ -14,6 +14,7 @@ set -euo pipefail
 
 REPO_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 export REPO_DIR
+asked_channel=${OMARCHY_CHANNEL:-}
 # shellcheck source=lib/common.sh
 source "$REPO_DIR/lib/common.sh"
 
@@ -21,6 +22,20 @@ need_user
 
 if ! grep -q 'VERSION_ID="24.04"' /etc/os-release; then
   warn "this bootstrap is written for Ubuntu 24.04; continuing anyway"
+fi
+
+# The channel is chosen here (OMARCHY_CHANNEL=rc ./bootstrap.sh, stable
+# otherwise) and recorded before any step, root ones included, reads it. An
+# installed machine switches through omarchy-channel-set, as upstream's does,
+# never through a re-run that says otherwise.
+if [[ -f $OMARCHY_CHANNEL_FILE ]]; then
+  recorded=$(cat "$OMARCHY_CHANNEL_FILE")
+  if [[ -n $asked_channel && $asked_channel != "$recorded" ]]; then
+    die "this machine is on the $recorded channel; switch with: omarchy-channel-set $asked_channel"
+  fi
+else
+  mkdir -p "$(dirname "$OMARCHY_CHANNEL_FILE")"
+  printf '%s\n' "$OMARCHY_CHANNEL" >"$OMARCHY_CHANNEL_FILE"
 fi
 
 steps=("$REPO_DIR"/install/[0-9][0-9]-*.sh)

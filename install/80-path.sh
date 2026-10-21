@@ -1,19 +1,20 @@
 #!/bin/bash
 # Expose the port's commands and record the layout.
+# shellcheck source=../lib/common.sh
 source "${REPO_DIR:?}/lib/common.sh"
 need_user
 
 mkdir -p "$LOCAL_BIN"
-ln -sfn "$REPO_DIR/bin/omarchy-update-ubuntu" "$LOCAL_BIN/omarchy-update-ubuntu"
-ln -sfn "$REPO_DIR/bin/omarchy-build-qt-apps" "$LOCAL_BIN/omarchy-build-qt-apps"
-ln -sfn "$REPO_DIR/bin/omarchy-share-picker-region" "$LOCAL_BIN/omarchy-share-picker-region"
-ln -sfn "$REPO_DIR/bin/omarchy-audio-input-denoise" "$LOCAL_BIN/omarchy-audio-input-denoise"
-note "omarchy-update-ubuntu and omarchy-build-qt-apps on PATH (~/.local/bin)"
+for cmd in omarchy-update-ubuntu omarchy-channel-ubuntu omarchy-upstream-check omarchy-build-qt-apps \
+  omarchy-share-picker-region omarchy-audio-input-denoise; do
+  ln -sfn "$REPO_DIR/bin/$cmd" "$LOCAL_BIN/$cmd"
+done
+note "omarchy-update-ubuntu, omarchy-channel-ubuntu, omarchy-upstream-check and omarchy-build-qt-apps on PATH (~/.local/bin)"
 
 cat <<EOF
 
 Installed layout:
-  Omarchy checkout      $OMARCHY_PATH  (branch $OMARCHY_BRANCH on $OMARCHY_TAG; /usr/share/omarchy -> it)
+  Omarchy checkout      $OMARCHY_PATH  (branch $OMARCHY_BRANCH, $OMARCHY_CHANNEL channel on $(git -C "$OMARCHY_PATH" describe --tags --always); /usr/share/omarchy -> it)
   Qt                    $QT_DIR
   Sources               $SRC_DIR
   Binaries              $LOCAL_BIN

@@ -27,8 +27,9 @@ run it: a git checkout in "dev link" mode, with the shell built from source.
 - The companion apps: tensaku (screenshots), ttfx (screensaver), omacalc,
   omawrite, omacut, cliamp, herdr, aether, hyprland-preview-share-picker,
   gpu-screen-recorder, voxtype (dictation), LocalSend.
-- Updates: `omarchy-update-ubuntu` (also behind the menu's Update entry) rebases
-  the port's patches on the next upstream tag and reviews new migrations.
+- Updates: `omarchy-update-ubuntu` (also behind the menu's Update entry) rebuilds
+  the port's patches on the tag its channel pins and runs the new migrations;
+  Update > Channel switches between stable, rc, edge and dev as upstream does.
 - The menu's Install/Remove entries work against dpkg, snap and flatpak, and
   install what apt lacks from the vendor's own apt repository or .deb, from
   Omarchy's package repository, from mise, or from the upstream release.
@@ -56,6 +57,9 @@ cannot unlock Ubuntu's `login` keyring, which is encrypted with your password;
 run `bin/omarchy-keyring-passwordless` once from a terminal to get Omarchy's
 passwordless default keyring (see [docs/gotchas.md](docs/gotchas.md)).
 
+`OMARCHY_CHANNEL=rc` in front of the bootstrap follows upstream's release
+candidates instead of its releases; see [Channels](#channels).
+
 Personal files are never overwritten: existing `~/.config/hypr/*.lua` and
 `~/.bashrc` are backed up with a `.bak-omarchy` suffix the first time and left
 alone afterwards; a terminal config that already exists is kept as it is.
@@ -72,34 +76,57 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 |---|---|
 | `bootstrap.sh` | runs `install/*.sh` in order; `-root.sh` steps run as root |
 | `install/` | numbered steps: apt, extra .debs, Qt, toolchains, Omarchy checkout, Quickshell, tools, user, root, config, session, browser policy, PATH |
-| `versions.env` | pinned versions for everything cloned or downloaded |
-| `patches/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (apt backend behind the package helpers, update hand-off, logout without uwsm, theme and app fixes); each one touches as little of upstream as it can, so the next tag rebases without conflicts |
+| `lib/` | `channel.sh` (channels, their pins and series), `migrations.sh` (what the updater does with migrations that reach for Arch), `units.sh` (user units), `common.sh` |
+| `versions.env` | pinned versions for everything cloned or downloaded, the Omarchy tag of each channel among them; `versions.rc.env` holds what the rc channel pins differently |
+| `patches/stable/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (apt backend behind the package helpers, update and channel hand-offs, logout without uwsm, theme and app fixes), with the tag the series was cut on in `base`; each one touches as little of upstream as it can, so the next tag rebases without conflicts. A channel whose series differs gets its own directory (`patches/rc/`). `bin/omarchy-port-series` cuts a series from a fork branch |
 | `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; the other Hyprland files are seeded from upstream's stubs |
 | `etc/` | PAM stacks (lock, polkit with fingerprint), polkit rule, wayland session entry |
-| `bin/` | `omarchy-update-ubuntu`, `omarchy-upstream-check`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
-| `.github/workflows/upstream.yml` | weekly report of what the next Omarchy brings for the port, posted as an issue |
+| `bin/` | `omarchy-update-ubuntu`, `omarchy-channel-ubuntu`, `omarchy-upstream-check`, `omarchy-port-series`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
+| `.github/workflows/upstream.yml` | weekly report of what the next Omarchy brings for each channel of the port, posted as issues |
 | `docs/` | deviations from upstream and the gotchas found while porting |
 
 ## Updating
 
-`omarchy-update-ubuntu` fetches the newest upstream tag, rebases the `ubuntu`
-branch on it, runs the new migrations (Arch-only ones become a question),
-reapplies the root-side pieces if upstream changed them, installs every user
-unit upstream ships (minus `lib/units.sh`'s skip list) and restarts the shell.
-Bump `versions.env` and rerun the matching `bootstrap.sh` step when Omarchy
-raises its Quickshell or app requirements.
+`omarchy-update-ubuntu` fast-forwards this repo, rebuilds the `ubuntu` branch
+from the series under `patches/` (applied on the tag it was cut on, then
+rebased onto the tag the channel pins), runs the new migrations (`lib/migrations.sh` names the Arch-only ones it marks done
+instead), reapplies the root-side pieces if upstream changed them, installs
+every user unit upstream ships (minus `lib/units.sh`'s skip list) and restarts
+the shell. `-y` asks nothing, as upstream's `omarchy-update -y`. Bump
+`versions.env` and rerun the matching `bootstrap.sh` step when Omarchy raises
+its Quickshell or app requirements.
+
+### Channels
+
+Upstream's `omarchy-channel-set` picks a package ring; here it records the
+channel in `~/.local/state/omarchy/channel` and updates onto it (the menu's
+Update > Channel entries do the same):
+
+| Channel | What the `ubuntu` branch is rebuilt on |
+|---|---|
+| `stable` | the release tag pinned as `OMARCHY_TAG_STABLE` in `versions.env` |
+| `rc` | the tag pinned as `OMARCHY_TAG_RC`: a pre-release, or the release while no newer pre-release is out, as upstream's rc ring carries |
+| `edge` | upstream's default branch, unpinned |
+| `dev` | nothing: the checkout is yours and the updater leaves its branch alone |
+
+A tag reaches a pin once the port was checked against it (below), the way a
+release only reaches upstream's ring once omarchy-pkgs built it; a machine
+then sees the new pin as an update the next time the bar asks
+(`omarchy-update-available`). `omarchy-version` reports the tag the checkout
+sits on, spelled as upstream's package (`4.0.6`, `4.5.0rc1`).
 
 ## Following upstream
 
 Omarchy tags a release every week or two and lands dozens of commits a day
-in between. The git rebase covers the checkout; what the port reproduces by
+in between. Rebuilding the `ubuntu` branch covers the checkout; what the port reproduces by
 hand outside it (package lists, `etc/`, install steps, user units) would
 drift in silence. `omarchy-upstream-check` reads what the next tag brings
 before anything is touched:
 
 ```
-omarchy-upstream-check                    # pinned tag -> newest release tag
-omarchy-upstream-check --branch           # pinned tag -> upstream's default branch
+omarchy-upstream-check                    # this machine's channel: its base -> the newest ref the channel admits
+omarchy-upstream-check --channel rc       # another channel: its pin -> its newest
+omarchy-upstream-check --branch           # base -> upstream's default branch, what edge follows
 omarchy-upstream-check --base v4.0.3 --target v4.0.4
 ```
 
@@ -111,11 +138,12 @@ the port mirrors by hand, the `etc/` files step 57 neither installs nor lists
 as skipped, and the new user units. It exits 1 on a conflict or on a package
 without an Ubuntu source, 0 otherwise.
 
-The `upstream` workflow runs it every Monday (and on demand, with a ref of
-your choice) and keeps the result in an issue: one per release tag the port
-is not on yet, and a rolling preview of the default branch while the port is
-on the newest tag. `omarchy-update-ubuntu` prints the command for the tag it
-is about to apply.
+The `upstream` workflow runs it every Monday (and on demand, for one channel
+or all, with a ref of your choice) and keeps one issue per channel: for stable
+and rc, the newest ref the channel admits while its pin is behind it, closed
+once the pin catches up or a newer ref supersedes it; for edge, a rolling
+preview of upstream's default branch over the rc pin. `omarchy-update-ubuntu`
+prints the command for the tag it is about to apply.
 
 ## Status
 

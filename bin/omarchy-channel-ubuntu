@@ -1,0 +1,156 @@
+#!/bin/bash
+
+# The port's side of upstream's channels. omarchy-channel-set,
+# omarchy-channel-current, omarchy-version and omarchy-update-available hand
+# over here when there is no pacman (fork patch 0013): upstream reads the
+# channel off /etc/pacman.conf and the version off the omarchy package, the
+# port off the tag its checkout sits on (lib/channel.sh).
+#
+#   omarchy-channel-ubuntu current                    # stable | rc | edge | dev
+#   omarchy-channel-ubuntu set <stable|rc|edge|dev>   # record it, then update onto it
+#   omarchy-channel-ubuntu target                     # the ref the channel resolves to
+#   omarchy-channel-ubuntu version                    # 4.0.6; 4.5.0rc1; 4.5.0rc1.r12.g1a2b3c4 past a tag; dev (1a2b3c4)
+#   omarchy-channel-ubuntu update-available           # what the channel has ahead of this machine; exit 1 when nothing
+
+set -uo pipefail
+
+PORT_DIR=${OMARCHY_UBUNTU_DIR:-$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
+OMARCHY_PATH=${OMARCHY_PATH:-/usr/share/omarchy}
+# shellcheck source=../lib/channel.sh
+source "$PORT_DIR/lib/channel.sh" || exit 1
+
+usage() { echo "Usage: omarchy-channel-ubuntu <current|set <stable|rc|edge|dev>|target|version|update-available>" >&2; }
+
+g() { git -C "$OMARCHY_PATH" "$@"; }
+
+plural() { if (( $2 == 1 )); then echo "$1"; else echo "${1}s"; fi; }
+
+# Upstream's package version for a tag: v4.5.0-rc1 is 4.5.0rc1.
+pkgver() {
+  local v=${1#v}
+  echo "${v//-/}"
+}
+
+# The ref the channel resolves to right now.
+target() {
+  local ref
+  ref=$(channel_tag)
+  [[ -n $ref ]] || ref=$(channel_newest "$OMARCHY_CHANNEL" "$OMARCHY_PATH")
+  echo "$ref"
+}
+
+# The upstream commit the branch sits on, found under the port's commits
+# (lib/channel.sh), whatever the pin says now: a pin moved back reads as an
+# update too. A branch the scan cannot place (dev, or one of the user's own)
+# counts from the nearest tag.
+base_commit() {
+  local tag
+  if channel_branch_scan "$OMARCHY_PATH" HEAD "$(channel_patches)" 2>/dev/null; then
+    echo "$OMARCHY_BRANCH_BASE"
+    return 0
+  fi
+  tag=$(g describe --tags --abbrev=0 2>/dev/null) || return 1
+  g rev-list -n1 "$tag"
+}
+
+version() {
+  local base tag count
+  if [[ $OMARCHY_CHANNEL == dev ]]; then
+    # As upstream reports a linked checkout.
+    if base=$(g rev-parse --short HEAD 2>/dev/null); then
+      echo "dev ($base)"
+    else
+      echo dev
+    fi
+    return 0
+  fi
+  base=$(base_commit) || { echo unknown; return 1; }
+  if ! tag=$(g describe --tags --abbrev=0 "$base" 2>/dev/null); then
+    echo "dev ($(g rev-parse --short "$base"))"
+    return 0
+  fi
+  count=$(g rev-list --count "$tag..$base")
+  if (( count > 0 )); then
+    # Past a tag (edge), spelled the way pacman spells a VCS build.
+    echo "$(pkgver "$tag").r$count.g$(g rev-parse --short "$base")"
+  else
+    pkgver "$tag"
+  fi
+}
+
+# The channel's pin as the port's repo has it on its tracking branch, which
+# update-available fetches but does not pull; the checked-out file otherwise.
+# Read as text and checked for the shape of a tag, never sourced: the bar
+# runs this with nobody watching, and a remote is not a thing to execute.
+pinned_tag() {
+  local var=OMARCHY_TAG_${OMARCHY_CHANNEL^^} value
+  value=$(git -C "$PORT_DIR" show '@{upstream}:versions.env' 2>/dev/null | sed -n "s/^${var}="'\${'"${var}"':-\([^}]*\)}.*/\1/p')
+  [[ $value =~ ^v[0-9][0-9A-Za-z.-]*$ ]] || value=$(channel_tag)
+  echo "$value"
+}
+
+update_available() {
+  local updates=() behind tracking newest installed offered
+  # The port itself first: the updater fast-forwards it before anything else.
+  if tracking=$(git -C "$PORT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
+    GIT_TERMINAL_PROMPT=0 timeout 10 git -C "$PORT_DIR" fetch --quiet 2>/dev/null || true
+    behind=$(git -C "$PORT_DIR" rev-list --count "HEAD..$tracking" 2>/dev/null || echo 0)
+    (( behind == 0 )) || updates+=("omarchy-ubuntu $behind new $(plural commit "$behind") on $tracking")
+  fi
+  case $OMARCHY_CHANNEL in
+    dev)
+      # As upstream: a tracking branch says what the checkout is behind.
+      if tracking=$(g rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
+        GIT_TERMINAL_PROMPT=0 timeout 10 g fetch --quiet 2>/dev/null || true
+        behind=$(g rev-list --count "HEAD..$tracking" 2>/dev/null || echo 0)
+        (( behind == 0 )) || updates+=("omarchy-dev-checkout $behind new $(plural commit "$behind") on $tracking")
+      fi
+      ;;
+    edge)
+      GIT_TERMINAL_PROMPT=0 timeout 10 g fetch --quiet origin 2>/dev/null || true
+      newest=$(channel_newest edge "$OMARCHY_PATH")
+      behind=$(g rev-list --count "$(base_commit)..$newest" 2>/dev/null || echo 0)
+      (( behind == 0 )) || updates+=("omarchy-edge $behind new $(plural commit "$behind") on $newest")
+      ;;
+    *)
+      installed=$(version)
+      offered=$(pkgver "$(pinned_tag)")
+      [[ $installed == "$offered" ]] || updates+=("omarchy $installed -> $offered")
+      ;;
+  esac
+  if (( ${#updates[@]} > 0 )); then
+    printf '%s\n' "${updates[@]}"
+    exit 0
+  fi
+  echo "Omarchy is up to date"
+  exit 1
+}
+
+set_channel() {
+  local channel=${1:-}
+  omarchy_channel_valid "$channel" || { usage; exit 1; }
+  if [[ $channel == dev && ${OMARCHY_UPDATE_UNATTENDED:-} != 1 ]]; then
+    cat <<WARNING
+
+The dev channel leaves the checkout at $OMARCHY_PATH to you: the updater stops
+moving it between tags and reapplying the port's patches. It is for working
+on Omarchy or on the port itself.
+
+WARNING
+    gum confirm --default=false "Switch to dev channel?" || { echo "Cancelled."; exit 0; }
+  fi
+  mkdir -p "$(dirname "$OMARCHY_CHANNEL_FILE")"
+  printf '%s\n' "$channel" >"$OMARCHY_CHANNEL_FILE"
+  echo "Channel set to $channel"
+  # As upstream: the switch is an update onto the new channel.
+  exec env OMARCHY_CHANNEL="$channel" "$PORT_DIR/bin/omarchy-update-ubuntu" -y
+}
+
+case ${1:-} in
+  current) echo "$OMARCHY_CHANNEL" ;;
+  set) set_channel "${2:-}" ;;
+  target) target ;;
+  version) version ;;
+  update-available) update_available ;;
+  *) usage; exit 1 ;;
+esac
