@@ -29,7 +29,10 @@ cargo_app() { # cargo_app <bin> <repo url> <tag> [extra cargo args...]
 if ! pkg-config --exists 'gtk4-layer-shell-0 >= 1.0'; then
   log "gtk4-layer-shell $GTK4_LAYER_SHELL_VERSION (meson, /usr/local, needs sudo for install)"
   git_checkout "$SRC_DIR/gtk4-layer-shell" https://github.com/wmww/gtk4-layer-shell "$GTK4_LAYER_SHELL_VERSION"
-  quietly meson setup "$SRC_DIR/gtk4-layer-shell/build" "$SRC_DIR/gtk4-layer-shell" --prefix=/usr/local
+  # Introspection and vapi, on by default, want g-ir-scanner and vapigen;
+  # nothing here reaches the library through GObject Introspection (tensaku
+  # and the share picker link it from Rust).
+  quietly meson setup "$SRC_DIR/gtk4-layer-shell/build" "$SRC_DIR/gtk4-layer-shell" --prefix=/usr/local -Dintrospection=false -Dvapi=false
   ninja -C "$SRC_DIR/gtk4-layer-shell/build"
   quietly sudo ninja -C "$SRC_DIR/gtk4-layer-shell/build" install
   sudo ldconfig
