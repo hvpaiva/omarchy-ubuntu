@@ -1,16 +1,23 @@
 name: upstream
 
-# What the next Omarchy brings for the port. Weekly, and on demand. The report
-# goes to an issue: one per release tag the port is not on yet, and a rolling
-# one for upstream's default branch while the port is on the newest tag.
+# What the next Omarchy brings for the port, per channel. Weekly, and on
+# demand. Each report goes to an issue named for its channel: one per upstream
+# ref the channel's pin is behind, closed once the pin catches up or a newer
+# ref takes its place; edge keeps a rolling preview of upstream's default
+# branch over the rc pin. A ref asked for by hand gets a one-off issue.
 
 on:
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
     inputs:
+      channel:
+        description: "Channel to report for (a ref needs one channel)"
+        type: choice
+        options: [all, stable, rc, edge]
+        default: all
       target:
-        description: "Upstream ref to compare with (empty: newest tag, or the default branch when already on it)"
+        description: "Upstream ref to compare with (empty: the newest the channel admits)"
         required: false
         default: ""
 
@@ -21,54 +28,111 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [stable, rc, edge]
+    # One run per channel at a time: two racing would post the same issue twice.
+    concurrency:
+      group: upstream-${{ matrix.channel }}
+      cancel-in-progress: false
+    env:
+      CHANNEL: ${{ matrix.channel }}
+      WANTED: ${{ github.event.inputs.channel || 'all' }}
+      TARGET: ${{ github.event.inputs.target }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Clone upstream
+      - name: Resolve the channel
+        id: resolve
         run: |
-          source versions.env
+          if [[ $WANTED != all && $WANTED != "$CHANNEL" ]]; then
+            echo "skip=1" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -n $TARGET && $WANTED == all ]]; then
+            echo "::error::a target ref needs one channel, not all"
+            exit 1
+          fi
+          export PORT_DIR=$PWD OMARCHY_CHANNEL=$CHANNEL
+          source lib/channel.sh
           git clone --quiet --filter=blob:none "$OMARCHY_REPO" "$RUNNER_TEMP/omarchy"
           git -C "$RUNNER_TEMP/omarchy" fetch --quiet --tags origin
-          newest=$(git -C "$RUNNER_TEMP/omarchy" tag --list 'v*' --sort=-v:refname | grep -v -- '-' | head -n1)
-          echo "pinned=$OMARCHY_TAG" >>"$GITHUB_ENV"
-          echo "newest=$newest" >>"$GITHUB_ENV"
+          git -C "$RUNNER_TEMP/omarchy" remote set-head origin --auto
+          pin=$(channel_tag)
+          newest=${TARGET:-$(channel_newest "$CHANNEL" "$RUNNER_TEMP/omarchy")}
+          if ! git -C "$RUNNER_TEMP/omarchy" rev-parse --verify --quiet "$newest^{commit}" >/dev/null; then
+            echo "::error::unknown upstream ref $newest"
+            exit 1
+          fi
+          echo "pin=$pin" >>"$GITHUB_OUTPUT"
+          echo "newest=$newest" >>"$GITHUB_OUTPUT"
+          if [[ -n $TARGET ]]; then
+            echo "oneoff=1" >>"$GITHUB_OUTPUT"
+            echo "title=Upstream $newest for the $CHANNEL channel, as requested: what changed for the port" >>"$GITHUB_OUTPUT"
+          elif [[ $CHANNEL == edge ]]; then
+            echo "title=Upstream preview for the edge channel: $(upstream_default_branch "$RUNNER_TEMP/omarchy") after $OMARCHY_TAG_RC" >>"$GITHUB_OUTPUT"
+          elif [[ $pin == "$newest" ]]; then
+            echo "The $CHANNEL pin is at $pin, the newest ref the channel admits."
+            echo "title=" >>"$GITHUB_OUTPUT"
+          else
+            echo "title=Upstream $newest for the $CHANNEL channel: what changed for the port" >>"$GITHUB_OUTPUT"
+          fi
 
       - name: Report
         id: report
+        if: steps.resolve.outputs.skip != '1' && steps.resolve.outputs.title != ''
+        env:
+          NEWEST: ${{ steps.resolve.outputs.newest }}
         run: |
           set +e
-          target=${{ github.event.inputs.target }}
-          if [[ -n $target ]]; then
-            args=(--target "$target"); title="Upstream $target: what changed for the port"
-          elif [[ $newest != "$pinned" ]]; then
-            args=(--target "$newest"); title="Upstream $newest: what changed for the port"
-          else
-            args=(--branch); title="Upstream preview: the default branch after $pinned"
-          fi
-          bin/omarchy-upstream-check --repo "$RUNNER_TEMP/omarchy" "${args[@]}" >report.md
-          echo "status=$?" >>"$GITHUB_OUTPUT"
-          echo "title=$title" >>"$GITHUB_OUTPUT"
+          bin/omarchy-upstream-check --repo "$RUNNER_TEMP/omarchy" --channel "$CHANNEL" --target "$NEWEST" >report.md
+          status=$?
+          echo "status=$status" >>"$GITHUB_OUTPUT"
           cat report.md
+          # 0 and 1 are reports; anything else is the check failing to run.
+          (( status <= 1 )) || { echo "::error::omarchy-upstream-check exited $status"; exit 1; }
 
       - name: Post or update the issue
+        if: steps.resolve.outputs.skip != '1' && steps.resolve.outputs.title != ''
         env:
-          GH_TOKEN: ${{ github.token }}
+          TITLE: ${{ steps.resolve.outputs.title }}
         run: |
-          title='${{ steps.report.outputs.title }}'
           {
             cat report.md
             echo
             echo "_Run ${{ github.run_id }} of ${{ github.workflow }}, $(date -u +%F)._"
           } >body.md
-          number=$(gh issue list --state open --search "in:title \"$title\"" --json number,title \
-            --jq ".[] | select(.title == \"$title\") | .number" | head -n1)
+          # The REST listing is consistent where the search index lags.
+          number=$(gh api "repos/$GITHUB_REPOSITORY/issues?labels=upstream&state=open&per_page=100" \
+            --jq ".[] | select(.pull_request == null) | select(.title == \"$TITLE\") | .number" | head -n1)
           if [[ -n $number ]]; then
             gh issue edit "$number" --body-file body.md
           else
             gh label create upstream --description "what the next Omarchy brings for the port" --color 0e8a16 --force
-            gh issue create --title "$title" --body-file body.md --label upstream
+            gh issue create --title "$TITLE" --body-file body.md --label upstream
           fi
 
+      - name: Close the channel's superseded issues
+        if: steps.resolve.outputs.skip != '1' && steps.resolve.outputs.oneoff != '1' && steps.report.outcome != 'failure'
+        env:
+          TITLE: ${{ steps.resolve.outputs.title }}
+          PIN: ${{ steps.resolve.outputs.pin }}
+          NEWEST: ${{ steps.resolve.outputs.newest }}
+        run: |
+          # Every other open report for this channel is behind what was just
+          # posted, or behind the pin when nothing was.
+          gh api "repos/$GITHUB_REPOSITORY/issues?labels=upstream&state=open&per_page=100" \
+            --jq ".[] | select(.pull_request == null) | select(.title | test(\"for the $CHANNEL channel\")) | select(.title != \"$TITLE\") | .number" |
+            while read -r number; do
+              if [[ -n $TITLE ]]; then
+                gh issue close "$number" --comment "Superseded by the report for $NEWEST."
+              else
+                gh issue close "$number" --comment "The $CHANNEL channel is on $PIN, the newest ref it admits."
+              fi
+            done
+
       - name: Attention needed
-        if: steps.report.outputs.status != '0'
-        run: echo "::warning::the report has a rebase conflict or a package without an Ubuntu source"
+        if: steps.report.outputs.status == '1'
+        run: echo "::warning::the $CHANNEL report has a rebase conflict or a package without an Ubuntu source"

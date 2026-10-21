@@ -4,17 +4,19 @@
 set -euo pipefail
 
 REPO_DIR=${REPO_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}
-# shellcheck source=../versions.env
-source "$REPO_DIR/versions.env"
 # shellcheck source=units.sh
 source "$REPO_DIR/lib/units.sh"
 
 OMARCHY_USER=${OMARCHY_USER:-${SUDO_USER:-${PKEXEC_UID:+$(id -un "$PKEXEC_UID")}}}
 OMARCHY_USER=${OMARCHY_USER:-$(id -un)}
 OMARCHY_HOME=$(getent passwd "$OMARCHY_USER" | cut -d: -f6)
+# The channel is the user's, so it is read once the user is known.
+# shellcheck source=channel.sh
+source "$REPO_DIR/lib/channel.sh"
 OMARCHY_PATH=${OMARCHY_PATH:-$OMARCHY_HOME/.local/share/omarchy}
 SRC_DIR=${SRC_DIR:-$OMARCHY_HOME/.local/src}
 QT_DIR=${QT_DIR:-$OMARCHY_HOME/.local/opt/Qt/$QT_VERSION/gcc_64}
+# shellcheck disable=SC2034  # for the steps that source this
 LOCAL_BIN=$OMARCHY_HOME/.local/bin
 DOWNLOADS=$REPO_DIR/downloads
 JOBS=${JOBS:-$(nproc)}
@@ -37,9 +39,9 @@ run_root() {
   if (( EUID == 0 )); then
     OMARCHY_USER=$OMARCHY_USER "$script" "$@"
   elif [[ ! -t 0 && -n ${WAYLAND_DISPLAY:-}${DISPLAY:-} ]] && command -v pkexec >/dev/null && [[ ${OMARCHY_ROOT_VIA:-pkexec} == pkexec ]]; then
-    pkexec env OMARCHY_USER="$OMARCHY_USER" REPO_DIR="$REPO_DIR" "$script" "$@"
+    pkexec env OMARCHY_USER="$OMARCHY_USER" OMARCHY_CHANNEL="$OMARCHY_CHANNEL" REPO_DIR="$REPO_DIR" "$script" "$@"
   else
-    sudo env OMARCHY_USER="$OMARCHY_USER" REPO_DIR="$REPO_DIR" "$script" "$@"
+    sudo env OMARCHY_USER="$OMARCHY_USER" OMARCHY_CHANNEL="$OMARCHY_CHANNEL" REPO_DIR="$REPO_DIR" "$script" "$@"
   fi
 }
 

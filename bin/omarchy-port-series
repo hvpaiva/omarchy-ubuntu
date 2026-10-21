@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Cut a channel's patch series from a branch of the Omarchy fork and record the
+# tag it was cut on next to it. The port applies the series on that tag and
+# rebases the branch onto whatever the channel resolves to (lib/channel.sh), so
+# the recorded tag must be the one the branch really sits on.
+#
+#   omarchy-port-series <checkout> <base-tag> [channel]   (channel: stable)
+#
+# <checkout> is a clone of Omarchy whose current branch is <base-tag> plus the
+# port's commits and nothing else.
+
+set -euo pipefail
+
+usage="Usage: omarchy-port-series <checkout> <base-tag> [channel]"
+PORT_DIR=${OMARCHY_UBUNTU_DIR:-$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
+checkout=${1:?$usage}
+base=${2:?$usage}
+channel=${3:-stable}
+dir=$PORT_DIR/patches/$channel
+
+git -C "$checkout" rev-parse --verify --quiet "refs/tags/$base" >/dev/null || { echo "no tag $base in $checkout" >&2; exit 1; }
+git -C "$checkout" merge-base --is-ancestor "$base" HEAD || { echo "the branch in $checkout is not on top of $base" >&2; exit 1; }
+[[ -z $(git -C "$checkout" status --porcelain) ]] || { echo "$checkout has uncommitted changes" >&2; exit 1; }
+
+mkdir -p "$dir"
+rm -f "$dir"/*.patch
+git -C "$checkout" format-patch --quiet -o "$dir" "$base"
+printf '%s\n' "$base" >"$dir/base"
+patches=("$dir"/*.patch)
+echo "${#patches[@]} patches on $base in ${dir#"$PORT_DIR/"}"

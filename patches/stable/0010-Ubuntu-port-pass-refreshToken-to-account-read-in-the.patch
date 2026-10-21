@@ -1,7 +1,7 @@
-From 084b417448259e383900ad837e4f835972982d10 Mon Sep 17 00:00:00 2001
+From bd8ad836483d3d163dd8f4dffa8c39257949d69c Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Thu, 24 Sep 2026 09:49:03 -0300
-Subject: [PATCH 10/12] Ubuntu port: pass refreshToken to account/read in the
+Subject: [PATCH 10/13] Ubuntu port: pass refreshToken to account/read in the
  Codex usage probe
 
 Codex 0.156.0 never answers account/read without params, so the probe timed out after initialize and the agents panel showed no limits.
