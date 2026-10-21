@@ -232,6 +232,37 @@ else
   echo "Port patches on top of $target: $(git -C "$OMARCHY_PATH" rev-list --count "$target..$BRANCH")"
 fi
 
+# Upstream's update brings every package to the ring's version before the
+# migrations, which are written against them, run; here the pinned tools come
+# up to their pins the same way, each step a no-op when nothing moved. The
+# .debs need root, so that step runs only when one is behind.
+# OMARCHY_UPDATE_TOOLS=0 leaves all of them to the user.
+applied_dir=$PORT_DIR/.applied
+mkdir -p "$applied_dir"
+if [[ ${OMARCHY_UPDATE_TOOLS:-1} != 0 ]]; then
+  step "Pinned tools"
+  # The apt lists first: a build below may need a package a machine bootstrapped
+  # earlier never got. The lists are hashed as applied, like step 57's files.
+  lists_now=$(cat "$PORT_DIR"/packages/apt-*.txt | sha256sum | cut -d' ' -f1)
+  if [[ $lists_now != $(cat "$applied_dir/apt-lists.sha256" 2>/dev/null) ]]; then
+    echo "The apt lists changed; installing what is new (root)."
+    run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/10-apt-root.sh"
+    echo "$lists_now" >"$applied_dir/apt-lists.sha256"
+  else
+    echo "The apt lists are as last applied."
+  fi
+  outdated=$(REPO_DIR=$PORT_DIR "$PORT_DIR/install/15-extra-debs-root.sh" --outdated)
+  if [[ -n $outdated ]]; then
+    echo "Behind their pins: $(tr '\n' ' ' <<<"$outdated")(root)"
+    run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/15-extra-debs-root.sh"
+  else
+    echo "The .deb tools match their pins."
+  fi
+  for tools_step in 20-qt 25-toolchains 40-quickshell 45-tools 50-user; do
+    REPO_DIR=$PORT_DIR "$PORT_DIR/install/$tools_step.sh"
+  done
+fi
+
 step "Migrations"
 mkdir -p "$STATE_DIR"
 pending=$(omarchy-migrate --pending || true)
@@ -286,8 +317,6 @@ omarchy-hook post-update
 step "Pieces outside the checkout"
 # /etc/sudoers.d is not readable by the user, so the comparison uses the copy
 # of the upstream file saved when it was last applied.
-applied_dir=$PORT_DIR/.applied
-mkdir -p "$applied_dir"
 browser_defaults=$OMARCHY_PATH/default/chromium/policies/omarchy.json
 if ! cmp -s "$OMARCHY_PATH/bin/omarchy-theme-set-browser-policy" /usr/bin/omarchy-theme-set-browser-policy ||
   ! cmp -s "$OMARCHY_PATH/etc/sudoers.d/omarchy-theme-browser" "$applied_dir/omarchy-theme-browser" ||

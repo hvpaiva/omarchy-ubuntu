@@ -11,15 +11,20 @@ log "Omarchy glyph font"
 install -Dm644 "$OMARCHY_PATH/default/fonts/omarchy/omarchy.ttf" "$OMARCHY_HOME/.local/share/fonts/omarchy/omarchy.ttf"
 fc-cache -f "$OMARCHY_HOME/.local/share/fonts/omarchy" >/dev/null
 
-log "Nerd fonts (JetBrainsMono, CaskaydiaMono: what Omarchy's terminal configs use)"
+log "Nerd fonts $NERD_FONTS_VERSION (JetBrainsMono, CaskaydiaMono: what Omarchy's terminal configs use)"
 fonts=$OMARCHY_HOME/.local/share/fonts
+# The archives carry no version in their name, so the installed one is
+# stamped here and the cached archive dropped when it moves.
+stamp=$fonts/.nerd-fonts-version
 for family in JetBrainsMono CascadiaMono; do
-  if ! fc-list | grep -qi "${family/CascadiaMono/CaskaydiaMono}"; then
+  if ! fc-list | grep -qi "${family/CascadiaMono/CaskaydiaMono}" || [[ $(cat "$stamp" 2>/dev/null) != "$NERD_FONTS_VERSION" ]]; then
+    rm -f "$DOWNLOADS/$family.tar.xz"
     github_release_download ryanoasis/nerd-fonts "$NERD_FONTS_VERSION" "$family.tar.xz"
     mkdir -p "$fonts" && tar -xJf "$DOWNLOADS/$family.tar.xz" -C "$fonts" --wildcards '*.ttf'
-    note "installed $family nerd font"
+    note "installed $family nerd font $NERD_FONTS_VERSION"
   fi
 done
+mkdir -p "$fonts" && echo "$NERD_FONTS_VERSION" >"$stamp"
 fc-cache -f "$fonts" >/dev/null
 
 # Interactive and non-interactive shells started by the desktop must see
