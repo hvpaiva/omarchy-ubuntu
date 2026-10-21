@@ -2,6 +2,26 @@
 source "${REPO_DIR:?}/lib/common.sh"
 need_root
 
+# Upstream's theme (4.5) symlinks prev/next/radio/arrow.svg out of the packaged
+# default theme. The files are fcitx5's own, from the first release that ships
+# them; dpkg owns none of these names, so a later fcitx5-data that does
+# overwrites them. The updater fetches them on their own (--fcitx5-glyphs)
+# before the migration that activates the theme.
+fcitx5_glyphs() {
+  log "fcitx5: the SVG glyphs Omarchy's candidate-window theme links (fcitx5 >= 5.1.22; noble's 5.1.7 ships PNGs)"
+  install -d /usr/share/fcitx5/themes/default
+  for glyph in prev next radio arrow; do
+    [[ -s /usr/share/fcitx5/themes/default/$glyph.svg ]] && continue
+    curl -fsSL --remove-on-error -o "/usr/share/fcitx5/themes/default/$glyph.svg" \
+      "https://raw.githubusercontent.com/fcitx/fcitx5/$FCITX5_THEME_VERSION/src/ui/classic/themes/default/$glyph.svg"
+    note "written   /usr/share/fcitx5/themes/default/$glyph.svg"
+  done
+}
+if [[ ${1:-} == --fcitx5-glyphs ]]; then
+  fcitx5_glyphs
+  exit 0
+fi
+
 etc=$OMARCHY_PATH/etc
 sysd=$OMARCHY_PATH/default/systemd
 
@@ -58,3 +78,5 @@ if systemctl start systemd-zram-setup@zram0.service >/dev/null 2>&1; then
 else
   warn "zram0 did not start; the generator sets it up at the next boot, and 99-omarchy-sysctl.conf applies with it"
 fi
+
+fcitx5_glyphs

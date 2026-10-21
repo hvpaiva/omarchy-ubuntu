@@ -4,10 +4,12 @@
 # end (pkg-prune, keyring, system-pkgs, aur, orphans, snapshot); the fork hands
 # off to this script when there is no pacman. Steps: fast-forward the port
 # itself, rebuild the `ubuntu` branch (the port's patches) on the channel's ref
-# (lib/channel.sh), run new migrations with lib/migrations.sh deciding the
-# Arch-only ones, post-update hooks, pieces that live outside the checkout
-# (browser policy helper in /usr/bin, sudoers, user units, the port's commands),
-# reload Hyprland and restart the shell. It lives outside the checkout on
+# (lib/channel.sh), bring the pinned tools and the pieces that live outside the
+# checkout (helpers in /usr/bin, sudoers, system tweaks, user units, the port's
+# commands) up to it as upstream's package upgrade would, run the port's own
+# migrations and then upstream's new ones with lib/migrations.sh deciding the
+# Arch-only ones, post-update hooks, reload Hyprland and restart the shell.
+# It lives outside the checkout on
 # purpose: bash reads scripts incrementally and a rebuild (or a rebase, with
 # a fork) mid-run would corrupt it.
 #
@@ -34,7 +36,7 @@ target_arg=""
 for arg in "$@"; do
   case $arg in
     -y) export OMARCHY_UPDATE_UNATTENDED=1 ;;
-    -h | --help) sed -n '3,14p' "$0"; exit 0 ;;
+    -h | --help) sed -n '3,/^#   omarchy-update-ubuntu/p' "$0"; exit 0 ;;
     -*) echo "unknown option: $arg" >&2; exit 2 ;;
     *) target_arg=$arg ;;
   esac
@@ -163,7 +165,8 @@ else
     "Update Omarchy $base_before -> $target ($OMARCHY_CHANNEL channel)" \
     "" \
     "• the $BRANCH branch rebuilt on $target with the port's patches" \
-    "• new migrations run, the Arch-only ones as lib/migrations.sh decides" \
+    "• the pinned tools and the pieces outside the checkout brought up to it (root)" \
+    "• the port's migrations, then upstream's new ones, the Arch-only ones as lib/migrations.sh decides" \
     "• shell restarted at the end" \
     "" \
     "$whats_new" \
@@ -263,6 +266,105 @@ if [[ ${OMARCHY_UPDATE_TOOLS:-1} != 0 ]]; then
   done
 fi
 
+step "Pieces outside the checkout"
+# Upstream's package upgrade has these in place before the migrations run, and
+# a migration may count on them (4.5's mise declarations, say); so here.
+# /etc/sudoers.d is not readable by the user, so the comparison uses the copy
+# of the upstream file saved when it was last applied.
+browser_defaults=$OMARCHY_PATH/default/chromium/policies/omarchy.json
+locale_sudoers=$OMARCHY_PATH/etc/sudoers.d/omarchy-locale-generate
+if ! cmp -s "$OMARCHY_PATH/bin/omarchy-theme-set-browser-policy" /usr/bin/omarchy-theme-set-browser-policy ||
+  ! cmp -s "$OMARCHY_PATH/etc/sudoers.d/omarchy-theme-browser" "$applied_dir/omarchy-theme-browser" ||
+  { [[ -f $browser_defaults ]] && ! cmp -s "$browser_defaults" /etc/chromium/policies/managed/omarchy.json; } ||
+  { [[ -f $locale_sudoers ]] && { ! cmp -s "$OMARCHY_PATH/bin/omarchy-locale-generate" /usr/bin/omarchy-locale-generate ||
+    ! cmp -s "$locale_sudoers" "$applied_dir/omarchy-locale-generate"; }; } ||
+  [[ ! -f $locale_sudoers && -f $applied_dir/omarchy-locale-generate ]]; then
+  echo "A packaged helper, its sudoers rule or the default browser policy changed upstream; reapplying (root)."
+  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/70-browser-policy-root.sh"
+else
+  echo "The packaged helpers, their sudoers rules and the default browser policy match the checkout."
+fi
+if ! REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --manifest | cmp -s - "$applied_dir/57-system-tweaks.sha256"; then
+  echo "Omarchy's system tweaks changed upstream; reapplying (root)."
+  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/57-system-tweaks-root.sh"
+  # The lazy shims for what /etc/mise/conf.d declares (4.5) are the user's to
+  # rebuild, as upstream's install/user/mise.sh does.
+  if [[ -f /etc/mise/conf.d/omarchy-tools.toml ]] && command -v mise >/dev/null; then
+    mise reshim --system && mise reshim
+  fi
+else
+  echo "System tweaks match the checkout."
+fi
+# fcitx5's SVG glyphs, which 4.5's candidate theme links and noble's fcitx5
+# lacks (step 58); in place before the migration that activates the theme.
+if grep -qs -- '--activate' "$OMARCHY_PATH/bin/omarchy-theme-set-fcitx5"; then
+  for glyph in prev next radio arrow; do
+    [[ -s /usr/share/fcitx5/themes/default/$glyph.svg ]] && continue
+    echo "fcitx5's SVG glyphs are missing; fetching them (root)."
+    run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/58-system-extras-root.sh" --fcitx5-glyphs
+    break
+  done
+fi
+
+unhandled=$(REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --unhandled)
+if [[ -n $unhandled ]]; then
+  echo -e "\e[33mNew under upstream's etc/, neither installed nor skipped by the port's step 57:\e[0m"
+  sed 's/^/  /' <<<"$unhandled"
+fi
+
+REPO_DIR=$PORT_DIR "$PORT_DIR/install/80-path.sh" >/dev/null
+echo "The port's commands are linked in ~/.local/bin."
+
+mkdir -p "$HOME/.config/systemd/user"
+units_changed=0
+while IFS= read -r u; do
+  src=$OMARCHY_PATH/default/systemd/user/$u
+  dst=$HOME/.config/systemd/user/$u
+  if ! sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" | cmp -s - "$dst" 2>/dev/null; then
+    sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" >"$dst"
+    echo "unit updated: $u"
+    units_changed=1
+  fi
+done < <(omarchy_units "$OMARCHY_PATH/default/systemd/user")
+if (( units_changed )); then
+  systemctl --user daemon-reload
+else
+  echo "User units match the checkout."
+fi
+
+step "Port migrations"
+# The port's own (migrations/): they stand in for what upstream's package
+# upgrade did to the machine, so they run before upstream's migrations (one
+# of which reads what one of them writes) and once more after, for the ones
+# that wait on an upstream migration. A -root.sh beside one is its root half,
+# reached through run_root. Exit 75 (EX_TEMPFAIL) leaves one pending; the
+# last pass says so.
+export -f run_root
+mkdir -p "$applied_dir/migrations"
+port_migrations_ran=0
+run_port_migrations() { # run_port_migrations [last]
+  local file name status
+  for file in "$PORT_DIR"/migrations/*.sh; do
+    name=$(basename "$file")
+    [[ -f $file && $name != *-root.sh && ! -f $applied_dir/migrations/$name ]] || continue
+    status=0
+    OMARCHY_PATH="$OMARCHY_PATH" PORT_DIR="$PORT_DIR" bash -euo pipefail "$file" || status=$?
+    case $status in
+      0)
+        port_migrations_ran=1
+        echo -e "\e[32mRan port migration (${name%.sh})\e[0m"
+        touch "$applied_dir/migrations/$name"
+        ;;
+      75) [[ ${1:-} != last ]] || echo "${name%.sh}: left pending, not applicable yet." ;;
+      *)
+        echo -e "\e[31mPort migration ${name%.sh} failed (exit $status).\e[0m" >&2
+        exit "$status"
+        ;;
+    esac
+  done
+}
+run_port_migrations
+
 step "Migrations"
 mkdir -p "$STATE_DIR"
 pending=$(omarchy-migrate --pending || true)
@@ -310,54 +412,12 @@ else
     fi
   done
 fi
+run_port_migrations last
+export -nf run_root
+(( port_migrations_ran )) || echo "No port migration ran."
 
 step "Post-update hooks"
 omarchy-hook post-update
-
-step "Pieces outside the checkout"
-# /etc/sudoers.d is not readable by the user, so the comparison uses the copy
-# of the upstream file saved when it was last applied.
-browser_defaults=$OMARCHY_PATH/default/chromium/policies/omarchy.json
-if ! cmp -s "$OMARCHY_PATH/bin/omarchy-theme-set-browser-policy" /usr/bin/omarchy-theme-set-browser-policy ||
-  ! cmp -s "$OMARCHY_PATH/etc/sudoers.d/omarchy-theme-browser" "$applied_dir/omarchy-theme-browser" ||
-  { [[ -f $browser_defaults ]] && ! cmp -s "$browser_defaults" /etc/chromium/policies/managed/omarchy.json; }; then
-  echo "Browser policy helper, sudoers or default policy changed upstream; reapplying (root)."
-  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/70-browser-policy-root.sh"
-else
-  echo "Browser policy helper, sudoers and default policy match the checkout."
-fi
-if ! REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --manifest | cmp -s - "$applied_dir/57-system-tweaks.sha256"; then
-  echo "Omarchy's system tweaks changed upstream; reapplying (root)."
-  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/57-system-tweaks-root.sh"
-else
-  echo "System tweaks match the checkout."
-fi
-
-unhandled=$(REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --unhandled)
-if [[ -n $unhandled ]]; then
-  echo -e "\e[33mNew under upstream's etc/, neither installed nor skipped by the port's step 57:\e[0m"
-  sed 's/^/  /' <<<"$unhandled"
-fi
-
-REPO_DIR=$PORT_DIR "$PORT_DIR/install/80-path.sh" >/dev/null
-echo "The port's commands are linked in ~/.local/bin."
-
-mkdir -p "$HOME/.config/systemd/user"
-units_changed=0
-while IFS= read -r u; do
-  src=$OMARCHY_PATH/default/systemd/user/$u
-  dst=$HOME/.config/systemd/user/$u
-  if ! sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" | cmp -s - "$dst" 2>/dev/null; then
-    sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$src" >"$dst"
-    echo "unit updated: $u"
-    units_changed=1
-  fi
-done < <(omarchy_units "$OMARCHY_PATH/default/systemd/user")
-if (( units_changed )); then
-  systemctl --user daemon-reload
-else
-  echo "User units match the checkout."
-fi
 
 step "Hyprland and shell"
 if Hyprland --verify-config >/dev/null 2>&1; then
