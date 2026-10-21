@@ -1,0 +1,89 @@
+From 59cbcddccd1bc1f8f96c1d30387eec717728167d Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <contact@hvpaiva.dev>
+Date: Wed, 21 Oct 2026 09:52:18 -0300
+Subject: [PATCH 13/13] Ubuntu port: channel, version and update checks from
+ the port's updater
+
+omarchy-channel-set switches pacman rings, omarchy-channel-current and
+omarchy-version read the omarchy package, and omarchy-update-available asks
+checkupdates. Without pacman they called every install "dev" and never saw
+an update. Each hands over to omarchy-channel-ubuntu in one line at the top
+when there is no pacman, as omarchy-update does.
+---
+ bin/omarchy-channel-current  | 6 ++++++
+ bin/omarchy-channel-set      | 6 ++++++
+ bin/omarchy-update-available | 6 ++++++
+ bin/omarchy-version          | 6 ++++++
+ 4 files changed, 24 insertions(+)
+
+diff --git a/bin/omarchy-channel-current b/bin/omarchy-channel-current
+index cc35e13c..3fd94384 100755
+--- a/bin/omarchy-channel-current
++++ b/bin/omarchy-channel-current
+@@ -4,6 +4,12 @@
+ 
+ set -euo pipefail
+ 
++# Ubuntu port: every install is a checkout, so the path says nothing about the
++# channel; the port records the choice itself (omarchy-channel-ubuntu).
++if ! command -v pacman &>/dev/null && command -v omarchy-channel-ubuntu &>/dev/null; then
++  exec omarchy-channel-ubuntu current
++fi
++
+ # Dev is a linked source checkout: OMARCHY_PATH points somewhere other than
+ # the package-backed install at /usr/share/omarchy. This takes precedence over
+ # the package channels, since the checkout overrides whatever is installed.
+diff --git a/bin/omarchy-channel-set b/bin/omarchy-channel-set
+index 7e112388..2f961d8f 100755
+--- a/bin/omarchy-channel-set
++++ b/bin/omarchy-channel-set
+@@ -6,6 +6,12 @@
+ 
+ set -euo pipefail
+ 
++# Ubuntu port: there is no pacman ring to switch; a channel is a tag the
++# port's updater rebuilds the checkout on (omarchy-channel-ubuntu).
++if ! command -v pacman &>/dev/null && command -v omarchy-channel-ubuntu &>/dev/null; then
++  exec omarchy-channel-ubuntu set "$@"
++fi
++
+ usage() { echo "Usage: omarchy-channel-set [stable|rc|edge|dev]"; }
+ fail() { echo "Error: $*" >&2; exit 1; }
+ 
+diff --git a/bin/omarchy-update-available b/bin/omarchy-update-available
+index f1a70b25..874d8b86 100755
+--- a/bin/omarchy-update-available
++++ b/bin/omarchy-update-available
+@@ -4,6 +4,12 @@
+ 
+ set -euo pipefail
+ 
++# Ubuntu port: what is ahead is the channel's pinned tag and the port's own
++# repo, not a package in a ring (omarchy-channel-ubuntu).
++if ! command -v pacman &>/dev/null && command -v omarchy-channel-ubuntu &>/dev/null; then
++  exec omarchy-channel-ubuntu update-available
++fi
++
+ updates=()
+ 
+ if [[ $OMARCHY_PATH != "/usr/share/omarchy" ]]; then
+diff --git a/bin/omarchy-version b/bin/omarchy-version
+index 40b10a34..065a0c00 100755
+--- a/bin/omarchy-version
++++ b/bin/omarchy-version
+@@ -2,6 +2,12 @@
+ 
+ # omarchy:summary=Print the installed Omarchy version
+ 
++# Ubuntu port: the version is the tag the checkout sits on, not a package's,
++# and a checkout is not a dev link here (omarchy-channel-ubuntu).
++if ! command -v pacman &>/dev/null && command -v omarchy-channel-ubuntu &>/dev/null; then
++  exec omarchy-channel-ubuntu version
++fi
++
+ omarchy_path=${OMARCHY_PATH:-/usr/share/omarchy}
+ omarchy_path=${omarchy_path%/}
+ 
+-- 
+2.55.0
+

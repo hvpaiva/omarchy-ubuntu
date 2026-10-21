@@ -1,7 +1,7 @@
-From 4ae288cc4f650d48fcdc1da1f9442d434dd02fdc Mon Sep 17 00:00:00 2001
+From c2ab666e664e8f64b3e7b841cdeab00f8fc8e22d Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
-Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
+Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
  helpers
 
 Each omarchy-pkg-* helper keeps upstream's body untouched and hands over to
@@ -1114,5 +1114,5 @@ index c6dc7ed3..180d7c1a 100644
      + 'omarchy-pkg-missing() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 0; done; return 1; }\n'
      + 'omarchy-cmd-present() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0; }\n'
 -- 
-2.43.0
+2.55.0
 

@@ -1,7 +1,7 @@
-From f53e27cf3a5d1ba4396b2100229b3d00ed2893a8 Mon Sep 17 00:00:00 2001
+From 84ef6a7c812addace7b929ca5c1ac3d14ed00401 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Wed, 23 Sep 2026 11:50:14 -0300
-Subject: [PATCH 08/12] Ubuntu port: PHP from Ubuntu's modules, xdebug in debug
+Subject: [PATCH 08/13] Ubuntu port: PHP from Ubuntu's modules, xdebug in debug
  mode through mods-available
 
 Ubuntu enables PHP extensions per package, so bcmath, intl and mysql come as php-* packages instead of edits to /etc/php/php.ini, which does not exist there. Removing PHP or Symfony goes through omarchy-pkg-drop instead of pacman.

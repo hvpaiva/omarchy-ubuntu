@@ -2,24 +2,43 @@
 
 # Omarchy update for the Ubuntu port. Upstream's omarchy-update is pacman end to
 # end (pkg-prune, keyring, system-pkgs, aur, orphans, snapshot); the fork hands
-# off to this script when there is no pacman. Steps: fetch the new upstream tag
-# and rebase the `ubuntu` branch (the fork's patches) on it, run new migrations
-# with a review of the Arch-only ones, post-update hooks, pieces that live
-# outside the checkout (browser policy helper in /usr/bin, sudoers, user units),
+# off to this script when there is no pacman. Steps: fast-forward the port
+# itself, rebuild the `ubuntu` branch (the port's patches) on the channel's ref
+# (lib/channel.sh), run new migrations with lib/migrations.sh deciding the
+# Arch-only ones, post-update hooks, pieces that live outside the checkout
+# (browser policy helper in /usr/bin, sudoers, user units, the port's commands),
 # reload Hyprland and restart the shell. It lives outside the checkout on
-# purpose: bash reads scripts incrementally and a rebase mid-run would corrupt it.
+# purpose: bash reads scripts incrementally and a rebuild (or a rebase, with
+# a fork) mid-run would corrupt it.
 #
-#   omarchy-update-ubuntu [tag]     (default: the newest v* tag on origin)
+#   omarchy-update-ubuntu [-y] [ref]   (-y asks nothing, as upstream's; a ref overrides the channel's)
 
 set -euo pipefail
 
 OMARCHY_PATH=${OMARCHY_PATH:-/usr/share/omarchy}
 PORT_DIR=${OMARCHY_UBUNTU_DIR:-$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)}
 STATE_DIR=$HOME/.local/state/omarchy/migrations
+USER=${USER:-$(id -un)}
 LOG=/tmp/omarchy-update.log
 BRANCH=ubuntu
 # shellcheck source=../lib/units.sh
 source "$PORT_DIR/lib/units.sh"
+# shellcheck source=../lib/channel.sh
+source "$PORT_DIR/lib/channel.sh"
+# shellcheck source=../lib/migrations.sh
+source "$PORT_DIR/lib/migrations.sh"
+
+# -y is upstream's promise not to ask anything; omarchy-channel-set and the
+# menu's Channel entries pass it. A ref overrides the channel's for one run.
+target_arg=""
+for arg in "$@"; do
+  case $arg in
+    -y) export OMARCHY_UPDATE_UNATTENDED=1 ;;
+    -h | --help) sed -n '3,14p' "$0"; exit 0 ;;
+    -*) echo "unknown option: $arg" >&2; exit 2 ;;
+    *) target_arg=$arg ;;
+  esac
+done
 
 if [[ -z ${OMARCHY_UPDATE_LOGGED:-} ]]; then
   script_command=$(printf '%q ' "$0" "$@")
@@ -52,34 +71,103 @@ step() {
 }
 git -C "$OMARCHY_PATH" rev-parse --is-inside-work-tree >/dev/null
 
-if [[ -n $(git -C "$OMARCHY_PATH" status --porcelain) ]]; then
-  echo "The checkout at $OMARCHY_PATH has uncommitted changes. Commit or discard them before updating." >&2
-  git -C "$OMARCHY_PATH" status --short >&2
-  exit 1
+# On dev the checkout is the user's, whatever state it is in. Elsewhere a
+# rebuild cut short (a closed terminal, a kill) leaves git's am or rebase
+# state behind and part of the series on the branch, which nothing below would
+# notice.
+if [[ $OMARCHY_CHANNEL != dev ]]; then
+  if [[ -d $OMARCHY_PATH/.git/rebase-apply || -d $OMARCHY_PATH/.git/rebase-merge ]]; then
+    echo "An earlier rebuild of $OMARCHY_PATH was interrupted. Run: git -C $OMARCHY_PATH am --abort (or rebase --abort), then omarchy-update-ubuntu again." >&2
+    exit 1
+  fi
+  if [[ -n $(git -C "$OMARCHY_PATH" status --porcelain) ]]; then
+    echo "The checkout at $OMARCHY_PATH has uncommitted changes. Commit or discard them before updating." >&2
+    git -C "$OMARCHY_PATH" status --short >&2
+    exit 1
+  fi
+  current_branch=$(git -C "$OMARCHY_PATH" branch --show-current)
+  [[ $current_branch == "$BRANCH" ]] || {
+    echo "Current branch is '$current_branch', expected '$BRANCH'." >&2
+    exit 1
+  }
 fi
 
-current_branch=$(git -C "$OMARCHY_PATH" branch --show-current)
-[[ $current_branch == "$BRANCH" ]] || {
-  echo "Current branch is '$current_branch', expected '$BRANCH'." >&2
-  exit 1
+step "The port itself"
+# Fast-forwarded before anything reads what it pins. bash keeps reading the
+# copy of this script it opened; the new one takes over through exec.
+if [[ -z ${OMARCHY_UPDATE_PORT_PULLED:-} ]] && git -C "$PORT_DIR" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+  if [[ -n $(git -C "$PORT_DIR" status --porcelain) ]]; then
+    echo "$PORT_DIR has local changes; left as it is."
+  else
+    port_before=$(git -C "$PORT_DIR" rev-parse HEAD)
+    if ! git -C "$PORT_DIR" pull --quiet --ff-only; then
+      echo -e "\e[33m$PORT_DIR could not be fast-forwarded; continuing with the checked-out copy.\e[0m"
+    elif [[ $(git -C "$PORT_DIR" rev-parse HEAD) != "$port_before" ]]; then
+      echo "Port updated, $(git -C "$PORT_DIR" rev-list --count "$port_before..HEAD") new commits; restarting on the new copy."
+      exec env OMARCHY_UPDATE_PORT_PULLED=1 "$0" "$@"
+    else
+      echo "Port up to date."
+    fi
+  fi
+else
+  echo "Port at $(git -C "$PORT_DIR" describe --always --dirty 2>/dev/null)."
+fi
+
+step "Fetching upstream"
+git -C "$OMARCHY_PATH" fetch --quiet --tags origin
+git -C "$OMARCHY_PATH" remote set-head origin --auto >/dev/null 2>&1 || true
+series=$(channel_patches)
+series_size=$(series_subjects "$series" | wc -l)
+# Where the branch is: the upstream commit under the port's commits, named by
+# its tag or by the nearest tag below it (lib/channel.sh). Not the pin, which
+# may have moved either way since.
+if channel_branch_scan "$OMARCHY_PATH" "$BRANCH" "$series"; then
+  base_sha=$OMARCHY_BRANCH_BASE
+  base_before=$(git -C "$OMARCHY_PATH" describe --tags "$base_sha" 2>/dev/null || git -C "$OMARCHY_PATH" rev-parse --short "$base_sha")
+else
+  base_sha=""
+  base_before=unknown
+fi
+if [[ -n $target_arg ]]; then
+  target=$target_arg
+elif [[ $OMARCHY_CHANNEL == dev ]]; then
+  target=""
+else
+  target=$(channel_tag)
+  [[ -n $target ]] || target=$(channel_newest "$OMARCHY_CHANNEL" "$OMARCHY_PATH")
+fi
+target_sha=""
+if [[ -n $target ]] && ! target_sha=$(git -C "$OMARCHY_PATH" rev-parse --verify --quiet "$target^{commit}"); then
+  echo "unknown upstream ref: $target" >&2
+  exit 2
+fi
+echo "Channel: $OMARCHY_CHANNEL   Current base: $base_before   Target: ${target:-none, the checkout is yours}"
+
+# The branch is at the target when it was built on exactly that commit and
+# carries the whole series and nothing the series dropped: a pin moved back,
+# a series that changed, or an upstream commit past a tag all read as an update.
+at_target() {
+  [[ -n $base_sha && $base_sha == "$target_sha" && $OMARCHY_BRANCH_SERIES == "$series_size" && $OMARCHY_BRANCH_STALE == 0 ]]
 }
 
-step "Fetching upstream tags"
-git -C "$OMARCHY_PATH" fetch --quiet --tags origin
-base_before=$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)
-target=${1:-$(git -C "$OMARCHY_PATH" tag --list 'v*' --sort=-v:refname | head -n1)}
-echo "Current base: $base_before   Target: $target"
-
-if [[ $base_before != "$target" ]]; then
+if [[ -z $target ]]; then
+  echo "dev channel: the $BRANCH branch is left as it is."
+  omarchy-update-stay-awake start
+elif at_target; then
+  echo "The checkout is already at $target."
+  omarchy-update-stay-awake start
+else
+  whats_new="What's new: https://github.com/omacom/omarchy/compare/$base_before...${target#origin/}"
+  [[ $target != v* ]] || whats_new="What's new: https://github.com/omacom/omarchy/releases/tag/$target"
   gum style --border normal --padding "1 2" \
-    "Update Omarchy $base_before -> $target" \
+    "Update Omarchy $base_before -> $target ($OMARCHY_CHANNEL channel)" \
     "" \
-    "• rebase of the $BRANCH branch patches" \
-    "• new migrations reviewed one by one" \
+    "• the $BRANCH branch rebuilt on $target with the port's patches" \
+    "• new migrations run, the Arch-only ones as lib/migrations.sh decides" \
     "• shell restarted at the end" \
     "" \
-    "What's new: https://github.com/omacom/omarchy/releases/tag/$target" \
-    "What it means for the port: omarchy-upstream-check --target $target"
+    "$whats_new" \
+    "What it means for the port: omarchy-upstream-check --base $base_before --target $target"
   echo
   if [[ ${OMARCHY_UPDATE_UNATTENDED:-} != 1 ]] && ! gum confirm "Continue?"; then
     echo "Cancelled"
@@ -88,15 +176,60 @@ if [[ $base_before != "$target" ]]; then
 
   omarchy-update-stay-awake start
 
-  step "Rebasing $BRANCH onto $target"
-  if ! git -C "$OMARCHY_PATH" rebase --quiet "$target"; then
-    echo -e "\n\e[31mRebase conflict. Resolve it in $OMARCHY_PATH (git status; git rebase --continue) and run omarchy-update-ubuntu again.\e[0m" >&2
-    exit 1
+  if [[ -n $OMARCHY_FORK ]]; then
+    # A fork's branch is the user's to carry; a rebase keeps what they added.
+    step "Rebasing $BRANCH onto $target"
+    if ! git -C "$OMARCHY_PATH" rebase --quiet "$target"; then
+      echo -e "\n\e[31mRebase conflict. Resolve it in $OMARCHY_PATH (git status; git rebase --continue) and run omarchy-update-ubuntu again.\e[0m" >&2
+      exit 1
+    fi
+  else
+    step "Rebuilding $BRANCH on $target from ${series#"$PORT_DIR/"}"
+    # The branch is the series and nothing else: a commit of the user's own
+    # would not survive the rebuild, so it stops here instead.
+    if [[ -z $base_sha ]]; then
+      echo -e "\e[31mNo upstream commit found under $BRANCH; the branch is not one the port built.\e[0m" >&2
+      echo "Keep it on a fork (OMARCHY_FORK in versions.env) or recreate it from the series: ${PORT_DIR}/bootstrap.sh 30." >&2
+      exit 1
+    fi
+    if (( ${#OMARCHY_BRANCH_FOREIGN[@]} > 0 )); then
+      echo -e "\e[31m$BRANCH carries commits that are neither upstream's nor the port's series:\e[0m" >&2
+      printf '  %s\n' "${OMARCHY_BRANCH_FOREIGN[@]}" >&2
+      echo "Keep them on a fork (OMARCHY_FORK in versions.env) or add them to the series, then run omarchy-update-ubuntu again." >&2
+      exit 1
+    fi
+    # The series goes on the tag it was cut on, then the branch moves to the
+    # target the way omarchy-upstream-check proves it can: a rebase works on
+    # trees, which a blobless clone fetches as needed.
+    series_base=$(channel_series_base)
+    previous=$(git -C "$OMARCHY_PATH" rev-parse "$BRANCH")
+    restore() {
+      git -C "$OMARCHY_PATH" am --abort 2>/dev/null || true
+      git -C "$OMARCHY_PATH" rebase --abort 2>/dev/null || true
+      git -C "$OMARCHY_PATH" checkout --quiet --detach
+      git -C "$OMARCHY_PATH" branch --quiet --force "$BRANCH" "$previous"
+      git -C "$OMARCHY_PATH" checkout --quiet "$BRANCH"
+    }
+    git -C "$OMARCHY_PATH" checkout --quiet --detach
+    git -C "$OMARCHY_PATH" branch --quiet --force "$BRANCH" "$series_base"
+    git -C "$OMARCHY_PATH" checkout --quiet "$BRANCH"
+    # The committer identity marks the commits as the port's for the next scan;
+    # set in the environment, where a GIT_COMMITTER_* of the user's would
+    # otherwise win over any -c.
+    if ! GIT_COMMITTER_NAME=omarchy-ubuntu GIT_COMMITTER_EMAIL=omarchy-ubuntu@localhost git -C "$OMARCHY_PATH" -c commit.gpgsign=false am --quiet "$series"/*.patch; then
+      failed=$(git -C "$OMARCHY_PATH" am --show-current-patch=raw 2>/dev/null | git mailinfo /dev/null /dev/null 2>/dev/null | sed -n 's/^Subject: //p')
+      restore
+      echo -e "\n\e[31m\"$failed\" does not apply on $series_base, the tag ${series#"$PORT_DIR/"} was cut on; the checkout is back on $base_before.\e[0m" >&2
+      exit 1
+    fi
+    if [[ $target != "$series_base" ]] && ! GIT_COMMITTER_NAME=omarchy-ubuntu GIT_COMMITTER_EMAIL=omarchy-ubuntu@localhost git -C "$OMARCHY_PATH" -c commit.gpgsign=false rebase --quiet --onto "$target" "$series_base" "$BRANCH" >/dev/null 2>&1; then
+      failed=$(git -C "$OMARCHY_PATH" log -1 --format=%s REBASE_HEAD 2>/dev/null)
+      restore
+      echo -e "\n\e[31m\"$failed\" does not apply on $target; the checkout is back on $base_before. See omarchy-upstream-check --base $base_before --target $target.\e[0m" >&2
+      exit 1
+    fi
   fi
   echo "Port patches on top of $target: $(git -C "$OMARCHY_PATH" rev-list --count "$target..$BRANCH")"
-else
-  echo "The checkout is already at $target."
-  omarchy-update-stay-awake start
 fi
 
 step "Migrations"
@@ -106,12 +239,18 @@ if [[ -z $pending ]]; then
   echo "None pending."
 else
   arch_only='pacman|yay|paru|makepkg|mkinitcpio|limine|systemd-boot|/etc/pacman'
-  while IFS= read -r name; do
+  # A list in a variable, not on stdin: a migration that asks something must
+  # find the terminal there, not the names of the migrations after it.
+  mapfile -t pending_names <<<"$pending"
+  for name in "${pending_names[@]}"; do
     [[ -n $name ]] || continue
     file=$OMARCHY_PATH/migrations/$name
     marker=$STATE_DIR/$name
-    if grep -qE "$arch_only" "$file"; then
-      echo -e "\n\e[33m${name%.sh} uses pacman or Arch boot tooling:\e[0m"
+    if migration_arch_only "$name"; then
+      touch "$marker"
+      echo "${name%.sh}: Arch-only, marked done (lib/migrations.sh)"
+    elif grep -qE "$arch_only" "$file" && ! migration_runs_here "$name"; then
+      echo -e "\n\e[33m${name%.sh} uses pacman or Arch boot tooling and lib/migrations.sh does not list it yet:\e[0m"
       grep -vE '^\s*(#|$)' "$file" | head -20
       echo
       if [[ ${OMARCHY_UPDATE_UNATTENDED:-} == 1 ]]; then
@@ -138,7 +277,7 @@ else
       OMARCHY_PATH="$OMARCHY_PATH" bash -euo pipefail "$file"
       touch "$marker"
     fi
-  done <<<"$pending"
+  done
 fi
 
 step "Post-update hooks"
@@ -169,6 +308,10 @@ if [[ -n $unhandled ]]; then
   sed 's/^/  /' <<<"$unhandled"
 fi
 
+REPO_DIR=$PORT_DIR "$PORT_DIR/install/80-path.sh" >/dev/null
+echo "The port's commands are linked in ~/.local/bin."
+
+mkdir -p "$HOME/.config/systemd/user"
 units_changed=0
 while IFS= read -r u; do
   src=$OMARCHY_PATH/default/systemd/user/$u
@@ -204,7 +347,7 @@ omarchy-update-stay-awake stop
 trap - EXIT
 
 echo
-echo "Omarchy $(omarchy-version) at $target."
+echo "Omarchy $(omarchy-version) on the $OMARCHY_CHANNEL channel."
 if [[ ${OMARCHY_UPDATE_UNATTENDED:-} != 1 ]]; then
   omarchy-show-done
 fi
