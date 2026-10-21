@@ -1,0 +1,26 @@
+From e2008639d53c0c18acb770a2bd9064dfec63cfb3 Mon Sep 17 00:00:00 2001
+From: Highlander Paiva <highlander.paiva@rdstation.com>
+Date: Tue, 22 Sep 2026 22:08:29 -0300
+Subject: [PATCH 03/11] Ubuntu port: render the foot theme into [colors]
+
+Ubuntu 24.04 ships foot 1.16, which rejects the [colors-dark] section
+that newer foot uses for scheme-aware palettes, so every theme switch
+logged an invalid section and foot kept its default colors. [colors] is
+accepted by every foot version and is what a single-scheme theme needs.
+---
+ default/themed/foot.ini.tpl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/default/themed/foot.ini.tpl b/default/themed/foot.ini.tpl
+index 3642fbbc..d2acab02 100644
+--- a/default/themed/foot.ini.tpl
++++ b/default/themed/foot.ini.tpl
+@@ -1,4 +1,4 @@
+-[colors-dark]
++[colors]
+ foreground={{ foreground_strip }}
+ background={{ background_strip }}
+ # Blur only applies while the background is see-through, as with Glassy windows,
+-- 
+2.55.0
+
