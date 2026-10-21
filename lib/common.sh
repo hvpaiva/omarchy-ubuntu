@@ -69,6 +69,19 @@ backup_once() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Launchpad's PPA mirrors answer 503 in bursts that outlast apt's own per-file
+# retries; a later apt-get picks up where the last one stopped, the archives
+# already fetched staying in its cache.
+apt_retry() { # apt_retry <apt-get arguments...>
+  local try
+  for try in 1 2 3 4 5; do
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 "$@" && return 0
+    (( try < 5 )) || return 1
+    warn "apt-get failed (attempt $try of 5); again in 60 s"
+    sleep 60
+  done
+}
+
 # git_checkout <dir> <url> <ref>: shallow clone at a tag, or switch an existing clone.
 git_checkout() {
   local dir=$1 url=$2 ref=$3

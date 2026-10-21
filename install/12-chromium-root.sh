@@ -16,7 +16,7 @@ if ! grep -rqs 'xtradeb/apps' /etc/apt/sources.list.d/; then
   log "xtradeb PPA"
   add-apt-repository -y ppa:xtradeb/apps
 else
-  apt-get update -qq
+  apt_retry update -qq
 fi
 
 # The pin must hold: an upgrade may take nothing from the PPA, and installing
@@ -50,7 +50,7 @@ install_file 644 /usr/lib/chromium/initial_preferences <<<"$omarchy_prefs"
 # fallback.
 if ! apt_installed chromium || ! apt_installed chromium-sandbox; then
   log "chromium"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends chromium chromium-sandbox
+  apt_retry install -y --no-install-recommends chromium chromium-sandbox
 fi
 
 log "Chromium reads ~/.config/chromium-flags.conf like on Arch"
