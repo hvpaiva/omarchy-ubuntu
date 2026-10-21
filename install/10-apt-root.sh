@@ -30,15 +30,14 @@ if ! grep -rqs 'pkgs.tailscale.com' /etc/apt/sources.list.d/; then
   curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
 fi
 
-# Launchpad answers 503 now and then; a retry gets the archive through.
-apt-get update -qq -o Acquire::Retries=5
+apt_retry update -qq
 
 read_list() { grep -vE '^\s*(#|$)' "$1"; }
 mapfile -t runtime < <(read_list "$REPO_DIR/packages/apt-runtime.txt")
 mapfile -t build < <(read_list "$REPO_DIR/packages/apt-build.txt")
 
 log "apt packages"
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -o Acquire::Retries=5 "${runtime[@]}" "${build[@]}"
+apt_retry install -y --no-install-recommends "${runtime[@]}" "${build[@]}"
 
 mapfile -t replaced < <(read_list "$REPO_DIR/packages/apt-replaced.txt")
 present=()
