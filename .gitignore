@@ -1,6 +1,5 @@
 # Machine-local state kept next to the repo, never versioned.
 .applied/
-hypr/
 *.bak
 *.bak-*
 downloads/
