@@ -60,6 +60,13 @@ rtkit
 desktop-file-utils
 pciutils
 
+# Core dumps for omarchy-crash-watch, which waits for systemd-coredump's journal
+# entries and offers the diagnosis: Arch's systemd carries it, Ubuntu ships it
+# apart. It takes the kernel's core_pattern, and the place of
+# apport-core-dump-handler where that is installed; apport hooks into it, so
+# its reports go on.
+systemd-coredump
+
 # Scripting (zstd: omarchy-upstream-check reads upstream's pacman databases)
 lua5.4
 jq
