@@ -33,14 +33,10 @@ libcairo2-dev
 libpango1.0-dev
 libxkbcommon-dev
 
-# gpu-screen-recorder
+# gpu-screen-recorder (FFmpeg and x264, built into it, need nasm)
+nasm
 libdbus-1-dev
 libgl-dev
-libavcodec-dev
-libavfilter-dev
-libavformat-dev
-libavutil-dev
-libswresample-dev
 libcap-dev
 libva-dev
 libpulse-dev
