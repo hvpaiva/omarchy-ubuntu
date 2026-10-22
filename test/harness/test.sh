@@ -498,7 +498,7 @@ sudo rm -f /etc/apt/sources.list.d/omarchy-test.sources
 
 echo "== S22 WirePlumber's drop-ins follow the WirePlumber on the machine"
 wp_dir=$HOME/.config/systemd/user/wireplumber.service.d
-fake_wp() { printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber %s"\n' "$2" | sudo install -m 755 /dev/stdin "$1"; }
+fake_wp() { printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber %s"\n' "$2" >"$HOME/fake-wireplumber" && sudo install -m 755 "$HOME/fake-wireplumber" "$1"; }
 units() { (cd "$PORT" && REPO_DIR=$PORT ./install/46-audio-denoise.sh --units) >/tmp/s22b.log 2>&1 || onfail /tmp/s22b.log; }
 dropins() { (cd "$wp_dir" 2>/dev/null && ls) | tr '\n' ' ' | sed 's/ $//'; }
 fake_wp /usr/bin/wireplumber 0.4.17
@@ -513,6 +513,7 @@ fake_wp /usr/bin/wireplumber 0.5.12
 units
 expect "S22 a release that packages 0.5: neither" "" "$(dropins)"
 sudo rm -f /usr/bin/wireplumber /usr/local/bin/wireplumber
+rm -f "$HOME/fake-wireplumber"
 
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
