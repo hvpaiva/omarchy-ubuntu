@@ -447,6 +447,9 @@ if (( units_changed )); then
 else
   echo "User units match the checkout."
 fi
+# The port's own, which step 46 installs: the denoise unit and, while
+# WirePlumber is noble's 0.4, the drop-in that restarts the filter-chain hosts.
+REPO_DIR=$PORT_DIR "$PORT_DIR/install/46-audio-denoise.sh" --units
 
 step "Port migrations"
 # The port's own (migrations/): they stand in for what upstream's package
