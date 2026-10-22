@@ -1,7 +1,7 @@
 From 6de5c1f51554a44150afa6f898c98c516cc58980 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 20:30:18 -0300
-Subject: [PATCH 02/11] Ubuntu port: hand omarchy-update to
+Subject: [PATCH 02/12] Ubuntu port: hand omarchy-update to
  omarchy-update-ubuntu when pacman is absent
 
 Every step of omarchy-update after the lock is pacman (prune, keyring,
