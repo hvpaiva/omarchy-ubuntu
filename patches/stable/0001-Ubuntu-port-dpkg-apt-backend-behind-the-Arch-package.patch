@@ -1,4 +1,4 @@
-From 84facdef6198302aef45cf642a18f68bc54668c6 Mon Sep 17 00:00:00 2001
+From 736682efaece8c455d209236ae6232ebdbb35871 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |   3 +
  bin/omarchy-pkg-present         |   3 +
  bin/omarchy-pkg-remove          |   3 +
- bin/omarchy-pkg-ubuntu          | 899 ++++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 904 ++++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |  13 +-
- 12 files changed, 961 insertions(+), 1 deletion(-)
+ 12 files changed, 966 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..b8eee71e
+index 00000000..76e6e7b6
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,899 @@
+@@ -0,0 +1,904 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -235,6 +235,7 @@ index 00000000..b8eee71e
 +  [dell-xps13-sidecar-amps]="skip Dell XPS 13 DX13260 amplifier enablement built for Arch's kernel and mkinitcpio"
 +  [apple-bcm-firmware-fetcher]="skip T2 Mac Wi-Fi firmware from Omarchy's hardware steps, which the port does not run"
 +  [linux-firmware-cirrus-dx13260]="skip Dell XPS 13 DX13260 speaker firmware from Omarchy's hardware steps, which the port does not run"
++  [aether]="deb aether github:omacom/aether:aether_.*_amd64\.deb$"
 +  [grok-bot]="pool grok-bot https://downloads.cursor.com/aptrepo grok-bot main"
 +  [openai-codex-desktop]="pool chatgpt https://persistent.oaistatic.com/codex-app-prod/linux/deb stable main"
 +  [perplexity]="pool perplexity https://packages.perplexity.ai/deb stable main"
@@ -262,6 +263,9 @@ index 00000000..b8eee71e
 +  [superwhisper-bin]="opr superwhisper-bin python3-gi gir1.2-gtk-4.0 gir1.2-atspi-2.0 gir1.2-gdkpixbuf-2.0 python3-fonttools"
 +  [moonlight-qt]="flatpak com.moonlight_stream.Moonlight"
 +  [zed]="custom zed"
++  [omacalc]="custom omacalc"
++  [omawrite]="custom omawrite"
++  [omacut]="custom omacut"
 +  [hype]="custom hype"
 +  [monologue]="custom monologue"
 +  [omasnap]="custom omasnap"
@@ -732,8 +736,9 @@ index 00000000..b8eee71e
 +}
 +
 +# Companion apps upstream ships as Arch packages: built from source by the port's
-+# omarchy-build-app (hype, monologue, omasnap, owe, owe-lockfeed, signed against the
-+# port's Qt; omarchy-hyprland-titlebars against the PPA's Hyprland).
++# omarchy-build-app (omacalc, omawrite, omacut, hype, monologue, omasnap, owe,
++# owe-lockfeed, signed against the port's Qt; omarchy-hyprland-titlebars against
++# the PPA's Hyprland).
 +PORT_DIR=${OMARCHY_UBUNTU_DIR:-$HOME/.local/share/omarchy-ubuntu}
 +
 +port_app_installed() {
@@ -745,7 +750,7 @@ index 00000000..b8eee71e
 +  esac
 +}
 +
-+for port_app in hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
++for port_app in omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
 +  eval "install_custom_${port_app//-/_}() { \"\$PORT_DIR/bin/omarchy-build-app\" $port_app; }
 +        installed_custom_${port_app//-/_}() { port_app_installed $port_app; }
 +        remove_custom_${port_app//-/_}() { \"\$PORT_DIR/bin/omarchy-build-app\" --remove $port_app; }"
