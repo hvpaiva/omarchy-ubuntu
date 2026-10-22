@@ -1,0 +1,19 @@
+# The base unit of v4l2-relayd 0.2.0, as Omarchy's package ships it. noble's
+# 0.1.2 makes this the relay itself, of a test pattern into a "Virtual Camera",
+# and its postinst enables it; upstream's units expect it to do nothing and the
+# relays to be instances of v4l2-relayd@.service.
+#
+# This service is actually a systemd target,
+# but we are using a service since targets cannot be reloaded.
+
+[Unit]
+Description=v4l2-relay daemon service
+After=modprobe@v4l2loopback.service systemd-logind.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,38 @@
+# The per-camera relay of v4l2-relayd 0.2.0, as Omarchy's package ships it;
+# noble's 0.1.2 has none. Upstream's v4l2-relayd@camlink.service.d drop-in
+# extends it, with /etc/v4l2-relayd.d/camlink.conf as the instance's settings.
+
+[Unit]
+Description=v4l2-relay daemon service for %i
+PartOf=v4l2-relayd.service
+After=modprobe@v4l2loopback.service systemd-logind.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/v4l2-relayd
+EnvironmentFile=-/etc/v4l2-relayd.d/%i.conf
+ExecCondition=/usr/bin/test -n "${VIDEOSRC}"
+ExecCondition=/usr/bin/test -n "$FORMAT"
+ExecCondition=/usr/bin/test -n "$WIDTH"
+ExecCondition=/usr/bin/test -n "$HEIGHT"
+ExecCondition=/usr/bin/test -n "$FRAMERATE"
+ExecCondition=/usr/bin/test -n "${CARD_LABEL}"
+ExecStart=/bin/sh -c 'DEVICE=$(grep -l -m1 -E "^${CARD_LABEL}$" /sys/devices/virtual/video4linux/*/name | cut -d/ -f6); exec /usr/bin/v4l2-relayd -i "${VIDEOSRC}" $${SPLASHSRC:+-s "$${SPLASHSRC}"} -o "appsrc name=appsrc caps=video/x-raw,format=${FORMAT},width=${WIDTH},height=${HEIGHT},framerate=${FRAMERATE} ! videoconvert ! v4l2sink name=v4l2sink device=/dev/$${DEVICE}" $EXTRA_OPTS'
+Restart=always
+PrivateNetwork=yes
+PrivateTmp=yes
+InaccessibleDirectories=/home
+ReadOnlyDirectories=/etc /sys
+CapabilityBoundingSet=
+LimitNPROC=1
+DeviceAllow=char-drm
+DeviceAllow=char-media
+# Intel IPU6 PSYS
+DeviceAllow=char-intel-ipu6-psys
+# Intel IPU7 PSYS
+DeviceAllow=char-psys
+DeviceAllow=char-video4linux
+DevicePolicy=closed
+
+[Install]
+WantedBy=multi-user.target
