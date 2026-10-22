@@ -537,7 +537,7 @@ r3_steps=(10-apt-root 12-chromium-root 15-extra-debs-root 55-root 57-system-twea
 for s in "${r3_steps[@]}"; do
   printf '#!/bin/bash\necho "%s $*" >>%s\n' "$s" "$r3_log" >"$PORT/install/$s.sh"
 done
-release_steps=$'10-apt-root \n12-chromium-root \n15-extra-debs-root --release\n55-root \n57-system-tweaks-root \n58-system-extras-root \n70-browser-policy-root \n47-base-packages '
+release_steps=$'10-apt-root --release\n12-chromium-root --release\n15-extra-debs-root --release\n55-root \n57-system-tweaks-root \n58-system-extras-root \n70-browser-policy-root \n47-base-packages '
 echo 22.04 >"$PORT/.applied/ubuntu-release"
 omarchy-update-ubuntu -y >/tmp/r3.log 2>&1; st=$?
 expect "R3 updater exit" 0 "$st"
