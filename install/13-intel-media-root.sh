@@ -77,13 +77,24 @@ decline() {
 }
 
 retire_ppa() {
-  rm -f "$pin"
   if ppa_on; then
     log "Intel's graphics PPA removed"
     add-apt-repository -y -r -n "ppa:$ppa"
   fi
   ppa_leftovers "$ppa"
   apt_retry update -qq
+  # The PPA's non-free iHD needs its own libva, and Ubuntu's archive has a
+  # non-free iHD only in multiverse: where that is off, the free one, from
+  # universe, takes its place first, beside the PPA's libva. It is the one
+  # package that may go.
+  if apt_installed intel-media-va-driver-non-free && [[ -z $(archive_version intel-media-va-driver-non-free) ]]; then
+    free=$(archive_version intel-media-va-driver)
+    [[ -n $free ]] || die "Ubuntu's archive has no iHD driver to go back to (universe and multiverse off)"
+    gone=$(LC_ALL=C apt-get -s install "intel-media-va-driver=$free" | awk '/^Remv / { print $2 }')
+    [[ $gone == intel-media-va-driver-non-free ]] || die "the free iHD driver does not simply replace the non-free one: apt would remove '${gone//$'\n'/ }'"
+    log "the free iHD driver in place of the non-free one, which Ubuntu's archive has only in multiverse"
+    apt_retry install -y "intel-media-va-driver=$free"
+  fi
   # Back to the newest version Ubuntu's archive has of each, which apt does
   # not downgrade to on its own.
   back=()
@@ -95,6 +106,8 @@ retire_ppa() {
     log "Ubuntu $UBUNTU_VERSION's media stack: ${back[*]}"
     apt_retry install -y --no-remove --allow-downgrades "${back[@]}"
   fi
+  # Last: a step cut short is due again at the next update.
+  rm -f "$pin"
 }
 
 if [[ ${1:-} == --undo ]]; then
