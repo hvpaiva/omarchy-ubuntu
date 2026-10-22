@@ -4,3 +4,4 @@ from-zeus/
 *.bak
 *.bak-*
 downloads/
+test/harness/logs/
