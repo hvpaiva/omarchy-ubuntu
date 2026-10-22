@@ -5,11 +5,11 @@ source "${REPO_DIR:?}/lib/common.sh"
 need_user
 
 mkdir -p "$LOCAL_BIN"
-for cmd in omarchy-update-ubuntu omarchy-channel-ubuntu omarchy-upstream-check omarchy-build-qt-apps \
+for cmd in omarchy-update-ubuntu omarchy-channel-ubuntu omarchy-upstream-check omarchy-build-app omarchy-build-qt-apps \
   omarchy-share-picker-region omarchy-audio-input-denoise; do
   ln -sfn "$REPO_DIR/bin/$cmd" "$LOCAL_BIN/$cmd"
 done
-note "omarchy-update-ubuntu, omarchy-channel-ubuntu, omarchy-upstream-check and omarchy-build-qt-apps on PATH (~/.local/bin)"
+note "omarchy-update-ubuntu, omarchy-channel-ubuntu, omarchy-upstream-check, omarchy-build-app and omarchy-build-qt-apps on PATH (~/.local/bin)"
 
 cat <<EOF
 
