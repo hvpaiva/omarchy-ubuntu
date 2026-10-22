@@ -214,6 +214,8 @@ check "S6 fcitx5 glyphs fetched before the theme migration" test -s /usr/share/f
 check "S6 the admin's mpv.conf kept beside upstream's" sudo sh -c 'cmp -s /etc/mpv/mpv.conf "$1" && grep -qx "# the admin.s" /etc/mpv/mpv.conf.bak-omarchy' _ "$OMARCHY_PATH/etc/mpv/mpv.conf"
 check "S6 upstream 1788163635 ran on the marker" test -f "$HOME/.local/state/omarchy/migrations/1788163635.sh"
 grep -q "Running migration (1788163635)" /tmp/s6.log && ok "S6 upstream 1788163635 ran, not marked" || ko "S6 upstream 1788163635 ran, not marked"
+# No Cam Link in a container: the port's migration has nothing to do and upstream's is marked.
+check "S6 Cam Link migration recorded, nothing installed without one" sh -c "test -f '$PORT/.applied/migrations/1792636073-camlink-4k.sh' && test -f '$HOME/.local/state/omarchy/migrations/1788862626.sh' && test ! -e /etc/modprobe.d/zz-omarchy-camlink-4k.conf"
 expect "S6 the inhibitor runs under Arch's umask" 0022 "$(sort -u "$HOME/stay-awake.umask" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
 expect "S6 the inhibitor's leftover state no longer group-writable" "" "$(find "${inhibitor_state%/*}" -maxdepth 0 -perm /022 2>/dev/null; find "$inhibitor_state" -perm /022 2>/dev/null)"
 printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
