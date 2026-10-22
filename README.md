@@ -4,9 +4,9 @@ Omarchy 4 on Ubuntu 24.04: the same shell, menus, themes, lock screen, companion
 apps and keybindings as [Omarchy](https://omarchy.org), on a machine whose
 operating system you are not allowed to replace.
 
-> **Installed before 2026-10-21?** Pull this repository before your next
-> update: the updater you have predates the channels and stops in a rebase
-> conflict. [Updating](#updating) has the three commands.
+> **Installed before 2026-10-22?** This repository's history was rewritten
+> that day, so your copy cannot fast-forward and the updater leaves it behind.
+> [Updating](#updating) has the commands to bring it to main once.
 
 ## Who this is for
 
@@ -118,17 +118,21 @@ port's own migrations (`migrations/`), upstream's new ones (`lib/migrations.sh`
 names the Arch-only ones it marks done instead), the post-update hooks, and the
 shell restarts. `-y` asks nothing, as upstream's `omarchy-update -y`.
 
-**From a port older than 2026-10-21** (before the channels: that updater took
-the newest tag of the checkout and rebased the branch onto it, and never
-updated the port itself), the next `omarchy-update-ubuntu` picks `v4.5.0-rc1`
-and stops in a rebase conflict. Abort it, bring this repository to main, then
-update; the branch is rebuilt from the series on the stable tag, nothing of
-the old one is needed
+**From a port cloned before 2026-10-22**, this repository cannot
+fast-forward: its history was rewritten that day, and `omarchy-update-ubuntu`
+ends saying the port itself was not updated. Bring it to main once, then
+update. The reset drops a change of yours to a tracked file in this
+repository, so stash or copy one first. A port older than 2026-10-21 (before
+the channels: that updater took the newest tag of the checkout, rebased the
+branch onto it and never updated the port itself) may also have stopped in a
+rebase conflict on `v4.5.0-rc1`; abort that first. The branch is rebuilt from
+the series on the stable tag, nothing of the old one is needed
 ([#18](https://github.com/hvpaiva/omarchy-ubuntu/issues/18)):
 
 ```sh
 git -C ~/.local/share/omarchy rebase --abort        # only if a rebase is in progress
-git -C ~/.local/share/omarchy-ubuntu pull --ff-only
+git -C ~/.local/share/omarchy-ubuntu fetch origin
+git -C ~/.local/share/omarchy-ubuntu reset --hard origin/main
 omarchy-update-ubuntu
 ```
 
