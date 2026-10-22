@@ -1,11 +1,12 @@
 name: test
 
 # The port's container harness on every change: the updater and channel
-# scenarios in a clean Ubuntu 24.04 image (about ten minutes, no PPA on the
-# way). The full bootstrap (steps 10 to 45: apt, Chromium, .debs, Qt, the
-# toolchains, the checkout, Quickshell, the tools) is heavy and hostage to
-# Launchpad's PPA mirrors, so it runs on demand, per channel, with apt's
-# cache carried from one run to the next.
+# scenarios in a clean image of each Ubuntu release the port runs on, 24.04
+# and 26.04 (about ten minutes each, no PPA on the way). The full bootstrap
+# (steps 10 to 45: apt, Chromium, .debs, Qt, the toolchains, the checkout,
+# Quickshell, the tools) is heavy and hostage to Launchpad's PPA mirrors, so
+# it runs on demand, per release and channel, with apt's cache carried from
+# one run to the next.
 
 on:
   pull_request:
@@ -14,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       bootstrap:
-        description: "Also run the full bootstrap (steps 10 to 45) on both channels"
+        description: "Also run the full bootstrap (steps 10 to 45) on both channels and both Ubuntu releases"
         type: boolean
         default: false
 
@@ -37,6 +38,10 @@ jobs:
   scenarios:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ["24.04", "26.04"]
     steps:
       # The whole history: the scenarios exercise the port's own git (its
       # self-update, what the remote carries), which a shallow clone fails.
@@ -44,12 +49,14 @@ jobs:
         with:
           fetch-depth: 0
       - name: Updater and channel scenarios
+        env:
+          UBUNTU: ${{ matrix.ubuntu }}
         run: test/harness/run.sh "$PWD" HEAD | tee scenarios.log
       - name: Summary
         if: always()
         run: |
           {
-            echo '### Scenarios'
+            echo '### Scenarios, Ubuntu ${{ matrix.ubuntu }}'
             echo '```'
             grep -E '^(FAIL|passed)' scenarios.log || true
             echo '```'
@@ -62,6 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        ubuntu: ["24.04", "26.04"]
         channel: [stable, rc]
     steps:
       - uses: actions/checkout@v4
@@ -72,13 +80,14 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/apt-cache
-          key: apt-cache-${{ matrix.channel }}-${{ github.run_id }}
-          restore-keys: apt-cache-${{ matrix.channel }}-
+          key: apt-cache-${{ matrix.ubuntu }}-${{ matrix.channel }}-${{ github.run_id }}
+          restore-keys: apt-cache-${{ matrix.ubuntu }}-${{ matrix.channel }}-
       # The runner context is a step's, not a job's: the cache directory is
       # named on each step that touches it.
       - name: Full bootstrap, steps 10 to 45
         env:
           APT_CACHE_DIR: ${{ runner.temp }}/apt-cache
+          UBUNTU: ${{ matrix.ubuntu }}
         run: |
           mkdir -p "$APT_CACHE_DIR"
           OMARCHY_CHANNEL=${{ matrix.channel }} test/harness/full.sh "$PWD" HEAD 10 12 15 20 25 30 40 45 | tee bootstrap.log
@@ -86,7 +95,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Bootstrap, ${{ matrix.channel }} channel"
+            echo "### Bootstrap, Ubuntu ${{ matrix.ubuntu }}, ${{ matrix.channel }} channel"
             echo '```'
             grep -E '^(OK|FAIL) +step' bootstrap.log || true
             echo '```'
@@ -102,9 +111,9 @@ jobs:
         if: always()
         with:
           path: ${{ runner.temp }}/apt-cache
-          key: apt-cache-${{ matrix.channel }}-${{ github.run_id }}
+          key: apt-cache-${{ matrix.ubuntu }}-${{ matrix.channel }}-${{ github.run_id }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bootstrap-${{ matrix.channel }}-logs
+          name: bootstrap-${{ matrix.ubuntu }}-${{ matrix.channel }}-logs
           path: test/harness/logs/

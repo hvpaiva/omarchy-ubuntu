@@ -1,6 +1,6 @@
 # omarchy-ubuntu
 
-Omarchy 4 on Ubuntu 24.04: the same shell, menus, themes, lock screen, companion
+Omarchy 4 on Ubuntu 24.04 and 26.04 LTS: the same shell, menus, themes, lock screen, companion
 apps and keybindings as [Omarchy](https://omarchy.org), on a machine whose
 operating system you are not allowed to replace.
 
@@ -40,7 +40,8 @@ run it: a git checkout in "dev link" mode, with the shell built from source.
 
 ## What stays Ubuntu
 
-GDM instead of SDDM (Omarchy's SDDM theme needs a newer SDDM), Ubuntu's Plymouth,
+GDM instead of SDDM (Omarchy's SDDM theme needs SDDM 0.21, newer than 24.04's;
+26.04 has it, and the port does not use it there yet), Ubuntu's Plymouth,
 apt instead of pacman (the Omarchy "Install" menu maps Arch names to apt or to
 the vendor's own channel), and no AUR. See [docs/deviations.md](docs/deviations.md).
 
@@ -94,7 +95,7 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `lib/` | `channel.sh` (channels, their pins and series), `migrations.sh` (what the updater does with migrations that reach for Arch), `units.sh` (user units), `catalog.py` (every package name an Omarchy tree can hand its package helpers), `common.sh` |
 | `migrations/` | the port's own migrations, run by the updater before upstream's for what its package upgrade would have done to the machine (`.applied/migrations/` records them; a `-root.sh` beside one is its root half) |
 | `versions.env` | pinned versions for everything cloned or downloaded, the Omarchy tag of each channel among them; `versions.rc.env` holds what the rc channel pins differently |
-| `patches/stable/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (apt backend behind the package helpers, update and channel hand-offs, logout without uwsm, theme and app fixes), with the tag the series was cut on in `base`; each one touches as little of upstream as it can, so the next tag rebases without conflicts. A channel whose series differs gets its own directory (`patches/rc/`). `bin/omarchy-port-series` cuts a series from a fork branch. `patches/apps/` holds what `omarchy-build-app` applies to a companion app's source when noble's libraries are behind what it was written against |
+| `patches/stable/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (apt backend behind the package helpers, update and channel hand-offs, logout without uwsm, theme and app fixes), with the tag the series was cut on in `base`; each one touches as little of upstream as it can, so the next tag rebases without conflicts. A channel whose series differs gets its own directory (`patches/rc/`). `bin/omarchy-port-series` cuts a series from a fork branch. `patches/apps/` holds what `omarchy-build-app` applies to a companion app's source when Ubuntu's libraries (noble's) are behind what it was written against |
 | `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; the other Hyprland files are seeded from upstream's stubs |
 | `etc/` | PAM stacks (lock, polkit with fingerprint), polkit rule, wayland session entry |
 | `bin/` | `omarchy-update-ubuntu`, `omarchy-channel-ubuntu`, `omarchy-upstream-check`, `omarchy-port-series`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
@@ -226,3 +227,7 @@ Hyprland 0.56 from `ppa:cppiber/hyprland`, Omarchy v4.0.6. Screen sharing,
 screen recording, fingerprint lock and polkit, Taildrop, dictation and the
 whole theme pipeline work. Not covered: Omarchy's ISO installer, Limine and
 snapper snapshots, the SDDM theme, Plymouth.
+
+On 26.04 LTS the container harness covers the bootstrap through step 45 and
+the updater (CI runs the scenarios on both releases); the steps that need a
+session (50 to 80) have yet to run on 26.04 hardware.
