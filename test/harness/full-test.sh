@@ -33,11 +33,35 @@ echo "== versions"
 # Qt apps print a locale warning before anything else under LANG=C.
 export LANG=C.UTF-8 PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/mise/shims:$PATH"
 for b in quickshell tensaku ttfx hyprpicker xdg-terminal-exec gpu-screen-recorder aether hyprland-preview-share-picker omacalc omawrite omacut omasnap owe cliamp herdr gum mise; do
-  if command -v "$b" >/dev/null 2>&1; then
-    printf '%-32s %s\n' "$b" "$("$b" --version 2>&1 | head -1 | cut -c1-70)"
-  else
+  if ! command -v "$b" >/dev/null 2>&1; then
     printf '%-32s missing\n' "$b"
+    continue
   fi
+  case $b in
+    # The companion apps build their QGuiApplication before they read
+    # --version, and a container has no display: Qt aborts, and the core goes
+    # to the host's systemd-coredump (core_pattern is not namespaced), whose
+    # crash notification lands on the desktop running the harness. Their
+    # version is the tag their source sits on.
+    omacalc | omawrite | omacut | omasnap | owe)
+      printf '%-32s %s (built, not run: it needs a display)\n' "$b" "$(git -C "$HOME/.local/src/$b" describe --tags 2>/dev/null || echo unknown)"
+      ;;
+    # No --version: it would open a terminal. Its step stamps what it built.
+    xdg-terminal-exec)
+      printf '%-32s %s\n' "$b" "$(cat "$PORT/.applied/xdg-terminal-exec" 2>/dev/null || echo unknown)"
+      ;;
+    *)
+      out=$(QT_QPA_PLATFORM=offscreen timeout 20 "$b" --version 2>&1)
+      st=$?
+      # A signal or a hang is the binary failing to start, not its version.
+      if (( st == 124 || st > 128 )); then
+        printf '%-32s FAIL (exit %s) %s\n' "$b" "$st" "$(head -1 <<<"$out" | cut -c1-50)"
+        status=1
+      else
+        printf '%-32s %s\n' "$b" "$(head -1 <<<"$out" | cut -c1-70)"
+      fi
+      ;;
+  esac
 done
 echo "== checkout"; git -C "$HOME/.local/share/omarchy" describe --tags; git -C "$HOME/.local/share/omarchy" rev-list --count "$(git -C "$HOME/.local/share/omarchy" describe --tags --abbrev=0)..HEAD"
 
