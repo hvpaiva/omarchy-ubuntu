@@ -11,12 +11,14 @@ fi
 export PATH="$OMARCHY_HOME/.cargo/bin:$PATH"
 
 # mise at the version Arch's snapshot carries (versions.env), through its own
-# installer and self-update; upstream's lazy shims need a current one.
-if ! have mise; then
+# installer and self-update; upstream's lazy shims need a current one. The
+# port's copy is ~/.local/bin/mise, ahead of a packaged /usr/bin/mise, which
+# is root's and cannot self-update as the user.
+export PATH="$LOCAL_BIN:$OMARCHY_HOME/.local/share/mise/shims:$PATH"
+if [[ ! -x $LOCAL_BIN/mise ]]; then
   log "mise $MISE_VERSION (https://mise.run)"
   curl -fsSL https://mise.run | MISE_VERSION="v$MISE_VERSION" sh
 fi
-export PATH="$LOCAL_BIN:$OMARCHY_HOME/.local/share/mise/shims:$PATH"
 if [[ $(mise --version 2>/dev/null | cut -d' ' -f1) != "$MISE_VERSION" ]]; then
   log "mise $MISE_VERSION (self-update)"
   mise self-update -y "v$MISE_VERSION" >/dev/null
