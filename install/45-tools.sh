@@ -38,6 +38,37 @@ if ! pkg-config --exists 'gtk4-layer-shell-0 >= 1.0'; then
   sudo ldconfig
 fi
 
+# WirePlumber: upstream's configs and migrations are written for 0.5, which
+# noble does not package. Its 0.4 reads none of upstream's wireplumber.conf.d
+# rules, and a restart of it leaves every stream unlinked while a filter-chain
+# runs. 0.5 goes to /usr/local beside noble's package; noble's user unit runs it
+# through step 46's drop-in, and a session already on it restarts on a rebuild.
+# Once the release packages 0.5 itself (an upgrade from noble), the build steps
+# aside: its libraries in /usr/local would shadow the system's.
+wireplumber_system=
+apt_installed wireplumber && wireplumber_system=$(dpkg-query -W -f='${Version}' wireplumber)
+if [[ $wireplumber_system == 0.4.* ]]; then
+  if [[ $(/usr/local/bin/wireplumber --version 2>/dev/null) != *"libwireplumber $WIREPLUMBER_VERSION"* ]]; then
+    log "WirePlumber $WIREPLUMBER_VERSION (meson, /usr/local, needs sudo for install)"
+    git_checkout "$SRC_DIR/wireplumber" https://gitlab.freedesktop.org/pipewire/wireplumber.git "$WIREPLUMBER_VERSION"
+    rm -rf "$SRC_DIR/wireplumber/build"
+    quietly meson setup "$SRC_DIR/wireplumber/build" "$SRC_DIR/wireplumber" --prefix=/usr/local --buildtype=release \
+      -Dsystem-lua=true -Dintrospection=disabled -Ddoc=disabled -Dtests=false -Ddbus-tests=false \
+      -Dsystemd=enabled -Dsystemd-user-service=false -Dsystemd-system-service=false -Delogind=disabled
+    quietly ninja -C "$SRC_DIR/wireplumber/build"
+    quietly sudo ninja -C "$SRC_DIR/wireplumber/build" install
+    sudo ldconfig
+    if [[ -f $OMARCHY_HOME/.config/systemd/user/wireplumber.service.d/20-omarchy-wireplumber-0.5.conf ]]; then
+      systemctl --user try-restart wireplumber.service 2>/dev/null || true
+    fi
+  fi
+elif [[ -n $wireplumber_system && -f $SRC_DIR/wireplumber/build/meson-logs/install-log.txt ]]; then
+  log "WirePlumber: the system's $wireplumber_system takes over from the build in /usr/local"
+  quietly sudo ninja -C "$SRC_DIR/wireplumber/build" uninstall
+  sudo ldconfig
+  rm -rf "$SRC_DIR/wireplumber/build"
+fi
+
 # xdg-terminal-exec: Omarchy launches every terminal through it. It has no
 # --version (that would launch a terminal), so the installed one is stamped.
 xte_stamp=$REPO_DIR/.applied/xdg-terminal-exec
