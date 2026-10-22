@@ -1,0 +1,110 @@
+name: test
+
+# The port's container harness on every change: the updater and channel
+# scenarios in a clean Ubuntu 24.04 image (about ten minutes, no PPA on the
+# way). The full bootstrap (steps 10 to 45: apt, Chromium, .debs, Qt, the
+# toolchains, the checkout, Quickshell, the tools) is heavy and hostage to
+# Launchpad's PPA mirrors, so it runs on demand, per channel, with apt's
+# cache carried from one run to the next.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: "Also run the full bootstrap (steps 10 to 45) on both channels"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# A push to main never runs the bootstrap, so it must not cancel a dispatched
+# one: the event is part of the group, and a second dispatch queues.
+concurrency:
+  group: test-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+# Without a shell named, a run step is `bash -e` and a harness that fails
+# behind `| tee` passes; `shell: bash` is `bash -eo pipefail`.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # The whole history: the scenarios exercise the port's own git (its
+      # self-update, what the remote carries), which a shallow clone fails.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Updater and channel scenarios
+        run: test/harness/run.sh "$PWD" HEAD | tee scenarios.log
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Scenarios'
+            echo '```'
+            grep -E '^(FAIL|passed)' scenarios.log || true
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+
+  bootstrap:
+    if: github.event_name == 'workflow_dispatch' && inputs.bootstrap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [stable, rc]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Restore and save apart: the cache action's own save runs only after a
+      # success, and a bootstrap a PPA failed is the one that needs its cache.
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/apt-cache
+          key: apt-cache-${{ matrix.channel }}-${{ github.run_id }}
+          restore-keys: apt-cache-${{ matrix.channel }}-
+      # The runner context is a step's, not a job's: the cache directory is
+      # named on each step that touches it.
+      - name: Full bootstrap, steps 10 to 45
+        env:
+          APT_CACHE_DIR: ${{ runner.temp }}/apt-cache
+        run: |
+          mkdir -p "$APT_CACHE_DIR"
+          OMARCHY_CHANNEL=${{ matrix.channel }} test/harness/full.sh "$PWD" HEAD 10 12 15 20 25 30 40 45 | tee bootstrap.log
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Bootstrap, ${{ matrix.channel }} channel"
+            echo '```'
+            grep -E '^(OK|FAIL) +step' bootstrap.log || true
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+      # apt wrote the cache as root inside the container; the cache action
+      # reads it as the runner's user.
+      - name: Hand the apt cache back to the runner
+        if: always()
+        env:
+          APT_CACHE_DIR: ${{ runner.temp }}/apt-cache
+        run: sudo chown -R "$(id -u):$(id -g)" "$APT_CACHE_DIR"
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ runner.temp }}/apt-cache
+          key: apt-cache-${{ matrix.channel }}-${{ github.run_id }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bootstrap-${{ matrix.channel }}-logs
+          path: test/harness/logs/
