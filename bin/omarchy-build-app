@@ -89,6 +89,7 @@ up_to_date() {
     [[ $(cat "$(qt_stamp_of "$app")" 2>/dev/null) == "$QT_VERSION" ]] || return 1
   fi
   [[ $app != omasnap || -f /usr/share/applications/omasnap.desktop ]] || return 1
+  [[ $app != omasnap ]] || layer_shell_qt_installed || return 1
   [[ $app != owe || -f /usr/share/owe/10-owe-sync ]] || return 1
   [[ $app != omarchy-hyprland-titlebars || $(cat "$(hyprland_stamp)" 2>/dev/null) == "$(hyprland_version)" ]]
 }
@@ -149,25 +150,41 @@ ensure_cmake() {
   cmake --version | grep -q " $CMAKE_VERSION" || die "cmake $CMAKE_VERSION not first on PATH"
 }
 
+# ECM and layer-shell-qt are built only for a Qt tree that lacks them, which
+# after a Qt bump means the build directory is the previous tree's: its cache
+# keeps Qt6_DIR, which -DCMAKE_PREFIX_PATH does not override, and KDE's
+# install dirs follow it, so the plugin and the QML module went to the old
+# tree. Each starts from a clean build directory.
 ensure_ecm() {
   [[ -f $QT_DIR/share/ECM/cmake/ECMConfig.cmake ]] && return 0
   ensure_cmake
   log "extra-cmake-modules $ECM_VERSION (into $QT_DIR)"
   git_checkout "$SRC_DIR/extra-cmake-modules" https://github.com/KDE/extra-cmake-modules "$ECM_VERSION"
+  rm -rf "$SRC_DIR/extra-cmake-modules/build"
   cmake_build "$SRC_DIR/extra-cmake-modules" "$SRC_DIR/extra-cmake-modules/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF -DBUILD_HTML_DOCS=OFF -DBUILD_MAN_DOCS=OFF -DBUILD_QTHELP_DOCS=OFF
   quietly cmake --install "$SRC_DIR/extra-cmake-modules/build"
 }
 
+# What omasnap needs of layer-shell-qt in the current Qt tree: the cmake
+# package to build against, and at run time the shell-integration plugin and
+# the QML module.
+layer_shell_qt_installed() {
+  [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake &&
+    -f $QT_DIR/plugins/wayland-shell-integration/liblayer-shell.so &&
+    -f $QT_DIR/qml/org/kde/layershell/qmldir ]]
+}
+
 ensure_layer_shell_qt() {
-  [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake ]] && return 0
+  layer_shell_qt_installed && return 0
   ensure_ecm
   log "layer-shell-qt $LAYER_SHELL_QT_VERSION (into $QT_DIR)"
   git_checkout "$SRC_DIR/layer-shell-qt" https://github.com/KDE/layer-shell-qt "$LAYER_SHELL_QT_VERSION"
+  rm -rf "$SRC_DIR/layer-shell-qt/build"
   # KDE's install dirs would pick Debian's lib/x86_64-linux-gnu; the Qt tree keeps lib/.
   cmake_build "$SRC_DIR/layer-shell-qt" "$SRC_DIR/layer-shell-qt/build" -DCMAKE_INSTALL_PREFIX="$QT_DIR" -DBUILD_TESTING=OFF \
     -DKDE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_CXX_FLAGS="-I$(wayland_compat)"
   quietly cmake --install "$SRC_DIR/layer-shell-qt/build"
-  [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake ]] || die "layer-shell-qt did not install into $QT_DIR"
+  layer_shell_qt_installed || die "layer-shell-qt did not install its cmake package, plugin and QML module into $QT_DIR"
 }
 
 install_desktop_entry() { # from the app's pkgbuild/ (upstream's package files), or the repo's applications/
@@ -336,10 +353,15 @@ case ${1:-} in
   --installed)
     # Every app on the machine, however it got there (step 45, the menu, a
     # migration): the updater brings each to its pin, build_one skipping the
-    # ones already there.
+    # ones already there. owe-lockfeed lives in a Qt tree, and after a Qt bump
+    # only the previous one has it.
     shift
     for app in omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
-      [[ -e $(marker_of "$app") ]] && set -- "$@" "$app"
+      if [[ $app == owe-lockfeed ]]; then
+        compgen -G "$OMARCHY_HOME/.local/opt/Qt/*/gcc_64/qml/Owe/LockFeed/qmldir" >/dev/null && set -- "$@" "$app"
+      elif [[ -e $(marker_of "$app") ]]; then
+        set -- "$@" "$app"
+      fi
     done
     (( $# > 0 )) || exit 0
     ;;
