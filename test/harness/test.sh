@@ -95,9 +95,16 @@ expect "S3 update-available sees the pin" "0:omarchy ${BASE#v} -> ${NEXT#v}" "$s
 echo "tester ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/99-omarchy-nopasswd-tester >/dev/null
 echo "tester ALL=(ALL) NOPASSWD: /usr/bin/true" | sudo tee /etc/sudoers.d/99-omarchy-nopasswd-odd >/dev/null
 sudo chmod 440 /etc/sudoers.d/99-omarchy-nopasswd-tester /etc/sudoers.d/99-omarchy-nopasswd-odd
+# A shell restarted by the update, and a journal where only the one it
+# replaced (another pid) logged errors, as the old shell does while it
+# reloads the new tree's files.
+printf '#!/bin/bash\necho "[{\\"pid\\":4242,\\"config_path\\":\\"%s/shell/shell.qml\\"}]"\n' "$OMARCHY_PATH" >"$HOME/shims/quickshell"
+printf '#!/bin/bash\n[[ " $* " == *" _PID=4242 "* ]] && exit 0\necho "file:///x/Dock.qml:347:5: ShellIpc is not a type"\n' >"$HOME/shims/journalctl"
+chmod +x "$HOME/shims/quickshell" "$HOME/shims/journalctl"
 omarchy-update-ubuntu -y >/tmp/s3.log 2>&1; st=$?
 expect "S3 updater exit" 0 "$st"
 [[ $st == 0 ]] || onfail /tmp/s3.log
+grep -q "The shell logged QML errors" /tmp/s3.log && ko "S3 the replaced shell's errors are not reported" || ok "S3 the replaced shell's errors are not reported"
 pieces=$(grep -n 'Pieces outside the checkout' /tmp/s3.log | head -1 | cut -d: -f1)
 migrations=$(grep -n $'\e\\[32mMigrations' /tmp/s3.log | head -1 | cut -d: -f1)
 [[ -n $pieces && -n $migrations ]] && (( pieces < migrations )) && ok "S3 root pieces reapplied before the migrations" || ko "S3 root pieces reapplied before the migrations (lines $pieces, $migrations)"
@@ -138,10 +145,14 @@ expect "S5 updater refuses" 1 "$st"
 grep -q "neither upstream's nor the port's series" /tmp/s5.log && ok "S5 names the foreign commit" || { ko "S5 names the foreign commit"; onfail /tmp/s5.log; }
 expect "S5 branch untouched" "$NEXT" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
 git -C "$OMARCHY_PATH" reset -q --hard HEAD~1
+# This time the shell that just started is the one that logged the error.
+printf '#!/bin/bash\n[[ " $* " == *" _PID=4242 "* ]] || exit 0\necho "file:///x/Dock.qml:347:5: ShellIpc is not a type"\n' >"$HOME/shims/journalctl"
 omarchy-update-ubuntu -y >/tmp/s5b.log 2>&1; st=$?
 expect "S5 updater goes through once removed" 0 "$st"
 [[ $st == 0 ]] || onfail /tmp/s5b.log
 expect "S5 version" "${BASE#v}" "$(omarchy-version)"
+grep -q "ShellIpc is not a type" /tmp/s5b.log && ok "S5 the new shell's errors are reported" || ko "S5 the new shell's errors are reported"
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/journalctl"
 
 echo "== S15 a rebase an updater from before the channels left in progress"
 GIT_SEQUENCE_EDITOR="sed -i 1s/^pick/edit/" git -C "$OMARCHY_PATH" rebase -q -i HEAD~1 >/dev/null 2>&1

@@ -461,7 +461,14 @@ else
 fi
 omarchy-restart-shell
 sleep 3
-shell_errors=$(journalctl --user -t omarchy-shell --since "-15s" --no-pager -o cat 2>/dev/null | grep -v IpcHandler | grep -iE "error|not a type|is not available|unavailable" | head -5 || true)
+# Only the shell that just started: while the update ran, the one it replaced
+# reloaded the new tree's files against modules it had loaded before, and
+# logged errors of a mix that never runs again.
+shell_pid=$(quickshell list -a -j 2>/dev/null | jq -r --arg dir "$OMARCHY_PATH/shell/" 'first(.[] | select(.config_path | startswith($dir)) | .pid) // empty' 2>/dev/null || true)
+shell_errors=""
+if [[ $shell_pid =~ ^[0-9]+$ ]]; then
+  shell_errors=$(journalctl --user -t omarchy-shell "_PID=$shell_pid" --no-pager -o cat 2>/dev/null | grep -v IpcHandler | grep -iE "error|not a type|is not available|unavailable" | head -5 || true)
+fi
 if [[ -n $shell_errors ]]; then
   echo -e "\e[33mThe shell logged QML errors:\e[0m"
   echo "$shell_errors"
