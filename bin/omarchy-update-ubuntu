@@ -159,13 +159,21 @@ fi
 
 step "The port itself"
 # Fast-forwarded before anything reads what it pins. bash keeps reading the
-# copy of this script it opened; the new one takes over through exec.
+# copy of this script it opened; the new one takes over through exec. An
+# untracked file (one an older port tracked and later dropped, say) is no
+# reason to hold it back: a fast-forward that would overwrite one fails on
+# its own.
+port_held=""
 if [[ -z ${OMARCHY_UPDATE_PORT_PULLED:-} ]] && git -C "$PORT_DIR" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
-  if [[ -n $(git -C "$PORT_DIR" status --porcelain) ]]; then
-    echo "$PORT_DIR has local changes; left as it is."
+  port_changes=$(git -C "$PORT_DIR" status --porcelain --untracked-files=no)
+  if [[ -n $port_changes ]]; then
+    port_held="it has local changes to tracked files; commit or stash them (git -C $PORT_DIR stash) and update again"
+    echo -e "\e[33m$PORT_DIR is not updated: local changes to tracked files\e[0m"
+    sed 's/^/  /' <<<"$port_changes"
   else
     port_before=$(git -C "$PORT_DIR" rev-parse HEAD)
     if ! git -C "$PORT_DIR" pull --quiet --ff-only; then
+      port_held="it could not be fast-forwarded to its upstream (git -C $PORT_DIR status says why)"
       echo -e "\e[33m$PORT_DIR could not be fast-forwarded; continuing with the checked-out copy.\e[0m"
     elif [[ $(git -C "$PORT_DIR" rev-parse HEAD) != "$port_before" ]]; then
       echo "Port updated, $(git -C "$PORT_DIR" rev-list --count "$port_before..HEAD") new commits; restarting on the new copy."
@@ -542,6 +550,9 @@ trap - EXIT
 
 echo
 echo "Omarchy $(omarchy-version) on the $OMARCHY_CHANNEL channel."
+if [[ -n $port_held ]]; then
+  echo -e "\e[33mThe port itself was not updated: $port_held.\e[0m"
+fi
 if [[ ${OMARCHY_UPDATE_UNATTENDED:-} != 1 ]]; then
   omarchy-show-done
 fi
