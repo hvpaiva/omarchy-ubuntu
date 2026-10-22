@@ -526,6 +526,19 @@ test_source "" "$codename"
 expect "R1 an enabled source at this release counts" yes "$(active)"
 sudo rm -f /etc/apt/sources.list.d/omarchy-test.sources
 
+echo "== S22 WirePlumber 0.4's drop-in: put in place by the updater, gone with 0.5"
+dropin=$HOME/.config/systemd/user/wireplumber.service.d/10-omarchy-filter-chains.conf
+printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber 0.4.17"\n' >"$HOME/shims/wireplumber"
+chmod +x "$HOME/shims/wireplumber"
+rm -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service" "$dropin"
+omarchy-update-ubuntu -y >/tmp/s22.log 2>&1 || onfail /tmp/s22.log
+check "S22 the denoise unit is in place" test -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service"
+check "S22 the drop-in is in place with 0.4" cmp -s "$PORT/config/systemd/user/wireplumber.service.d/10-omarchy-filter-chains.conf" "$dropin"
+printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber 0.5.18"\n' >"$HOME/shims/wireplumber"
+(cd "$PORT" && REPO_DIR=$PORT ./install/46-audio-denoise.sh --units) >/tmp/s22b.log 2>&1 || onfail /tmp/s22b.log
+check "S22 the drop-in goes with 0.5" test ! -e "$dropin"
+rm -f "$HOME/shims/wireplumber"
+
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
 # bootstrap refuses a channel other than the recorded one: set aside, as a

@@ -130,8 +130,12 @@ ppa_source "$ppa"
 apt_retry update -qq
 
 # The pin must hold: an upgrade may take only the media stack from the PPA.
-if LC_ALL=C apt-get -s dist-upgrade | grep '^Inst ' | grep 'intel-graphics' | grep -vqE "^Inst ($(IFS='|'; echo "${media[*]}")) "; then
-  LC_ALL=C apt-get -s dist-upgrade | grep '^Inst ' | grep 'intel-graphics' >&2
+# One awk reads the plan whole (a grep -q quitting early can SIGPIPE the
+# commands before it, which pipefail turns into no match; step 12 has the same).
+stray=$(LC_ALL=C apt-get -s dist-upgrade |
+  awk -v media="^Inst ($(IFS='|'; echo "${media[*]}")) " '/^Inst / && /intel-graphics/ && $0 !~ media')
+if [[ -n $stray ]]; then
+  echo "$stray" >&2
   die "the pin is not holding: an upgrade would pull the packages above from Intel's PPA"
 fi
 
