@@ -39,9 +39,9 @@ run_root() {
   if (( EUID == 0 )); then
     OMARCHY_USER=$OMARCHY_USER "$script" "$@"
   elif [[ ! -t 0 && -n ${WAYLAND_DISPLAY:-}${DISPLAY:-} ]] && command -v pkexec >/dev/null && [[ ${OMARCHY_ROOT_VIA:-pkexec} == pkexec ]]; then
-    pkexec env OMARCHY_USER="$OMARCHY_USER" OMARCHY_CHANNEL="$OMARCHY_CHANNEL" REPO_DIR="$REPO_DIR" "$script" "$@"
+    pkexec env OMARCHY_USER="$OMARCHY_USER" OMARCHY_CHANNEL="$OMARCHY_CHANNEL" REPO_DIR="$REPO_DIR" OMARCHY_INTEL_MEDIA="${OMARCHY_INTEL_MEDIA:-}" "$script" "$@"
   else
-    sudo env OMARCHY_USER="$OMARCHY_USER" OMARCHY_CHANNEL="$OMARCHY_CHANNEL" REPO_DIR="$REPO_DIR" "$script" "$@"
+    sudo env OMARCHY_USER="$OMARCHY_USER" OMARCHY_CHANNEL="$OMARCHY_CHANNEL" REPO_DIR="$REPO_DIR" OMARCHY_INTEL_MEDIA="${OMARCHY_INTEL_MEDIA:-}" "$script" "$@"
   fi
 }
 

@@ -409,6 +409,14 @@ if grep -qs -- '--activate' "$OMARCHY_PATH/bin/omarchy-theme-set-fcitx5"; then
   done
 fi
 
+# Intel's media stack for a GPU on the xe driver (step 13) replaces what every
+# VA-API client on the machine loads; a machine bootstrapped before the step
+# takes it when its owner runs the step.
+if [[ ${OMARCHY_INTEL_MEDIA:-} != 0 && ! -f /etc/apt/preferences.d/omarchy-intel-graphics-media ]] &&
+  compgen -G "/sys/bus/pci/drivers/xe/0000:*" >/dev/null; then
+  echo -e "\e[33mThis Intel GPU runs on the xe driver, for which noble's media stack has no hardware video: $PORT_DIR/bootstrap.sh 13 installs Intel's (docs/deviations.md).\e[0m"
+fi
+
 unhandled=$(REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --unhandled)
 if [[ -n $unhandled ]]; then
   echo -e "\e[33mNew under upstream's etc/, neither installed nor skipped by the port's step 57:\e[0m"
