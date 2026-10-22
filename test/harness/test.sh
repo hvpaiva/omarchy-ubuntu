@@ -45,6 +45,7 @@ git -C "$PORT" remote set-url origin /tmp/port.git
 git -C "$PORT" push -q -u origin main || { echo "the port's remote refused the push (a shallow source?)"; exit 2; }
 head=$(git -C "$PORT" rev-parse --short HEAD)
 echo "port at $head, branch $(git -C "$PORT" branch --show-current)"
+codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
 
 # On a release whose sudo is sudo-rs (26.04's image), the machine under test
 # is one step 55 already moved to classic sudo, as a bootstrap leaves it.
@@ -478,12 +479,18 @@ due() { (cd "$PORT" && env REPO_DIR="$PORT" "$@" ./install/13-intel-media-root.s
 # The container sees the host's PCI devices.
 xe=1
 for dev in /sys/bus/pci/drivers/xe/0000:*; do [[ $(cat "$dev/vendor" 2>/dev/null) == 0x8086 ]] && xe=0; done
+# Intel's PPA as the step adds it, at this release, or as a release upgrade
+# leaves it: off, at the old one.
+intel_ppa() { printf '%bTypes: deb\nURIs: https://ppa.launchpadcontent.net/kobuk-team/intel-graphics/ubuntu/\nSuites: %s\nComponents: main\n' "$1" "$2" | sudo tee /etc/apt/sources.list.d/omarchy-test-intel.sources >/dev/null; }
 expect "S20 due only on an Intel GPU on xe" "$xe" "$(due)"
 expect "S20 due when OMARCHY_INTEL_MEDIA=1 asks" 0 "$(due OMARCHY_INTEL_MEDIA=1)"
 expect "S20 never due with OMARCHY_INTEL_MEDIA=0" 1 "$(due OMARCHY_INTEL_MEDIA=0)"
 sudo touch /etc/apt/preferences.d/omarchy-intel-graphics-media
-expect "S20 not due once the pin is in place" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
-sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media
+intel_ppa "" "$codename"
+expect "S20 not due once the pin and the PPA are in place" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
+intel_ppa 'Enabled: no\n' oldrelease
+expect "S20 due again once a release upgrade turned the PPA off" 0 "$(due OMARCHY_INTEL_MEDIA=1)"
+sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media /etc/apt/sources.list.d/omarchy-test-intel.sources
 (cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester OMARCHY_INTEL_MEDIA=0 ./install/13-intel-media-root.sh) >/tmp/s20.log 2>&1 || { ko "S20 the step with OMARCHY_INTEL_MEDIA=0"; onfail /tmp/s20.log; }
 check "S20 declining leaves the user's marker" test -O "$PORT/.applied/13-intel-media-declined"
 expect "S20 not due once declined" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
@@ -502,12 +509,15 @@ esac
 EOF
   chmod +x "$HOME/shims/apt-cache"
 }
-fake_madison 2.24.1-1 26.3.2+dfsg1-1
+fake_madison 2.23.0-1ubuntu1 26.1.2+dfsg1-1
 expect "S20 not due where the archive's own stack drives xe (26.04)" 1 "$(due)"
 sudo touch /etc/apt/preferences.d/omarchy-intel-graphics-media
 expect "S20 due there to retire the PPA an install on noble took" 0 "$(due)"
+intel_ppa "" "$codename"
 expect "S20 OMARCHY_INTEL_MEDIA=1 keeps the PPA there" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
-sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media
+intel_ppa 'Enabled: no\n' noble
+expect "S20 OMARCHY_INTEL_MEDIA=1 after the upgrade from noble: the PPA again, at this release" 0 "$(due OMARCHY_INTEL_MEDIA=1)"
+sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media /etc/apt/sources.list.d/omarchy-test-intel.sources
 fake_madison 2.20.0-1build1 24.1.0+dfsg1-1
 expect "S20 noble's archive behind the PPA: due only on xe" "$xe" "$(due)"
 rm -f "$HOME/shims/apt-cache"
@@ -515,7 +525,6 @@ rm -f "$HOME/shims/apt-cache"
 echo "== R1 apt sources: a PPA counts only enabled, at this release"
 # A release upgrade leaves every PPA's file in place, turned off (Enabled: no)
 # and at the old release; the steps add the PPA again at the new one.
-codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
 test_source() { printf '%bTypes: deb\nURIs: https://ppa.launchpadcontent.net/omarchy/test/ubuntu/\nSuites: %s\nComponents: main\n' "$1" "$2" | sudo tee /etc/apt/sources.list.d/omarchy-test.sources >/dev/null; }
 active() { common "apt_source_active https://ppa.launchpadcontent.net/omarchy/test/ubuntu $codename && echo yes || echo no"; }
 test_source 'Enabled: no\n' "$codename"
