@@ -523,10 +523,13 @@ step "Post-update hooks"
 omarchy-hook post-update
 
 step "Hyprland and shell"
-if Hyprland --verify-config >/dev/null 2>&1; then
-  hyprctl reload >/dev/null
-else
-  echo -e "\e[33mHyprland --verify-config failed; check ~/.config/hypr/*.lua before hyprctl reload.\e[0m"
+# The running compositor's verdict, not --verify-config's: 0.56 segfaults on
+# its way out of a verify with 4.5's Lua config, whatever the config says.
+hyprctl reload >/dev/null 2>&1 || true
+config_errors=$(hyprctl configerrors 2>/dev/null || true)
+if [[ -n ${config_errors//[[:space:]]/} ]]; then
+  echo -e "\e[33mHyprland reported errors in its config:\e[0m"
+  echo "$config_errors"
 fi
 omarchy-restart-shell
 sleep 3

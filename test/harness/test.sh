@@ -361,6 +361,19 @@ git -C /tmp/app-src commit -q --allow-empty -m two && git -C /tmp/app-src tag -a
 (REPO_DIR=$PORT && source "$PORT/lib/common.sh" && git_checkout /tmp/app file:///tmp/app-src v1 && git_checkout /tmp/app file:///tmp/app-src v2) >/tmp/s17.log 2>&1
 expect "S17 the clone names the new tag" v2 "$(git -C /tmp/app describe --tags 2>/dev/null)"
 
+echo "== S18 Hyprland's config checked by the running compositor"
+# 0.56's verify segfaults on 4.5's Lua config whatever it holds; the
+# compositor that reloaded it reports the errors.
+printf '#!/bin/bash\n[[ $1 != configerrors ]] || echo "hyprland.lua:3: a bad thing"\n' >"$HOME/shims/hyprctl"
+printf '#!/bin/bash\nexit 139\n' >"$HOME/shims/Hyprland"
+omarchy-update-ubuntu -y >/tmp/s18.log 2>&1; st=$?
+expect "S18 updater exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s18.log
+grep -q "hyprland.lua:3: a bad thing" /tmp/s18.log && ok "S18 the compositor's config errors reported" || { ko "S18 the compositor's config errors reported"; onfail /tmp/s18.log; }
+grep -q "verify-config failed" /tmp/s18.log && ko "S18 no verdict from a crashed verify" || ok "S18 no verdict from a crashed verify"
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/hyprctl"
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/Hyprland"
+
 echo "== S8 dev channel"
 omarchy-channel-ubuntu set dev >/tmp/s8.log 2>&1; st=$?
 expect "S8 set dev exit" 0 "$st"

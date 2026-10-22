@@ -34,7 +34,13 @@ for f in xdph.conf hyprsunset.conf; do
     warn "$cfg/hypr/$f differs from Omarchy's (upstream adds the preview share picker); merge by hand"
   fi
 done
-Hyprland --verify-config >/dev/null 2>&1 || warn "Hyprland --verify-config failed; check $cfg/hypr/*.lua"
+verify_status=0
+Hyprland --verify-config >/dev/null 2>&1 || verify_status=$?
+case $verify_status in
+  0) ;;
+  139) note "Hyprland --verify-config crashed on its way out (0.56 with 4.5's Lua config); after login, hyprctl configerrors tells" ;;
+  *) warn "Hyprland --verify-config failed; check $cfg/hypr/*.lua" ;;
+esac
 
 log "Omarchy user config"
 mkdir -p "$cfg/omarchy"
