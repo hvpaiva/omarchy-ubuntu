@@ -1,4 +1,4 @@
-From 1561e6f470bbb5aaab55ab2ecea03493bacf46ff Mon Sep 17 00:00:00 2001
+From 45afbec49fb1a18d2537b0241c11bd9bd7048350 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |    3 +
  bin/omarchy-pkg-present         |    3 +
  bin/omarchy-pkg-remove          |    3 +
- bin/omarchy-pkg-ubuntu          | 1040 +++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 1050 +++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |   13 +-
- 12 files changed, 1102 insertions(+), 1 deletion(-)
+ 12 files changed, 1112 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..d835b83b
+index 00000000..d994841b
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,1040 @@
+@@ -0,0 +1,1050 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -281,6 +281,7 @@ index 00000000..d835b83b
 +  [linux-omarchy-n1x]="skip Omarchy's aarch64 NVIDIA N1x kernel; the port is amd64 on Ubuntu's kernel"
 +  [linux-omarchy-n1x-headers]="skip Omarchy's aarch64 NVIDIA N1x kernel; the port is amd64 on Ubuntu's kernel"
 +  [tensaku]="custom tensaku"
++  [cliamp]="custom cliamp"
 +  [aether]="deb aether github:omacom/aether:aether_.*_amd64\.deb$"
 +  [grok-bot]="pool grok-bot https://downloads.cursor.com/aptrepo grok-bot main"
 +  [openai-codex-desktop]="pool chatgpt https://persistent.oaistatic.com/codex-app-prod/linux/deb stable main"
@@ -854,6 +855,15 @@ index 00000000..d835b83b
 +remove_custom_tensaku() {
 +  rm -f "$HOME/.local/bin/tensaku" "$HOME/.local/bin/tensaku-edit" "$HOME/.local/share/applications/dev.tensaku.Tensaku.desktop"
 +  rm -rf "$HOME/.local/src/tensaku"
++}
++
++# cliamp: the version the port's system-level mise config declares
++# (/etc/mise/conf.d/omarchy-ubuntu.toml); step 45 leaves it out once removed.
++install_custom_cliamp() { mise install cliamp && mise reshim; }
++installed_custom_cliamp() { mise where cliamp >/dev/null 2>&1; }
++remove_custom_cliamp() {
++  mise uninstall --all cliamp >/dev/null 2>&1
++  mise reshim
 +}
 +
 +install_custom_zed() {

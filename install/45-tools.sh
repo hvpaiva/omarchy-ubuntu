@@ -73,10 +73,16 @@ cargo_app ttfx https://github.com/omacom-io/ttfx "$TTFX_VERSION"
 # mise config (/etc/mise/conf.d/omarchy-ubuntu.toml), the lowest precedence, so
 # a version the user declares in ~/.config/mise/config.toml wins and the port
 # never rewrites that file.
-if ! mise where "herdr@${HERDR_VERSION#v}" >/dev/null 2>&1 || ! mise where "cliamp@${CLIAMP_VERSION#v}" >/dev/null 2>&1; then
-  log "herdr $HERDR_VERSION and cliamp $CLIAMP_VERSION (mise, GitHub releases)"
-  mise install -q "herdr@${HERDR_VERSION#v}" "cliamp@${CLIAMP_VERSION#v}"
-fi
+# cliamp is one of the preinstalls: once removed it stays out.
+mise_tools=("herdr@${HERDR_VERSION#v}")
+grep -qx cliamp < <(removed_preinstalls) || mise_tools+=("cliamp@${CLIAMP_VERSION#v}")
+for tool in "${mise_tools[@]}"; do
+  if ! mise where "$tool" >/dev/null 2>&1; then
+    log "${mise_tools[*]} (mise, GitHub releases)"
+    mise install -q "${mise_tools[@]}"
+    break
+  fi
+done
 
 cargo_app hyprland-preview-share-picker https://github.com/WhySoBad/hyprland-preview-share-picker "$SHARE_PICKER_VERSION"
 
@@ -102,12 +108,10 @@ if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION"; then
   note "gsr-kms-server gets cap_sys_admin in install/55-root.sh"
 fi
 
-# The companion apps upstream's base lists at this tag, from source; the
-# others stay on demand through omarchy-pkg-ubuntu's recipes, and the ones
-# already on the machine follow their pins.
-apps=()
-for app in omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
-  grep -qx "$app" "$OMARCHY_PATH/install/omarchy-base.packages" && apps+=("$app")
-done
-"$REPO_DIR/bin/omarchy-build-app" "${apps[@]}"
+# The companion apps upstream's base lists at this tag, from source, less the
+# preinstalls the user removed; the others stay on demand through
+# omarchy-pkg-ubuntu's recipes, and the ones already on the machine follow
+# their pins.
+mapfile -t apps < <(base_apps)
+(( ${#apps[@]} == 0 )) || "$REPO_DIR/bin/omarchy-build-app" "${apps[@]}"
 "$REPO_DIR/bin/omarchy-build-app" --installed

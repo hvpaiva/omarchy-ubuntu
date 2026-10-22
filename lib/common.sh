@@ -127,6 +127,26 @@ github_release_download() {
 # apt_installed <pkg>
 apt_installed() { [[ $(dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null) == ?i* ]]; }
 
+# removed_preinstalls: what Remove > Preinstalls took away (the names upstream's
+# omarchy-remove-preinstalls drops), while its marker stands; nothing otherwise.
+# Upstream's update never brings them back, so neither does a step here.
+removed_preinstalls() {
+  [[ -f $OMARCHY_HOME/.local/state/omarchy/preinstalls-removed ]] || return 0
+  python3 "$REPO_DIR/lib/catalog.py" --calls "$OMARCHY_PATH" |
+    awk -F'\t' '$2 == "drop" && $3 ~ /^bin\/omarchy-remove-preinstalls:/ { print $1 }' | sort -u
+}
+
+# base_apps: the companion apps upstream's base list carries at the checkout's
+# tag, less the preinstalls the user removed.
+base_apps() {
+  local app removed
+  removed=$(removed_preinstalls)
+  for app in omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
+    grep -qx "$app" "$OMARCHY_PATH/install/omarchy-base.packages" || continue
+    grep -qx "$app" <<<"$removed" || echo "$app"
+  done
+}
+
 # rewrite_unit <src> <dst>: upstream units point at /usr/bin/omarchy-*; the dev link keeps the
 # scripts under /usr/share/omarchy/bin (a symlink to the checkout).
 rewrite_unit() { sed -e "s|/usr/bin/omarchy-|/usr/share/omarchy/bin/omarchy-|g" "$1" >"$2"; }
