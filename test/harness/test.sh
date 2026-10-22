@@ -143,6 +143,16 @@ expect "S5 updater goes through once removed" 0 "$st"
 [[ $st == 0 ]] || onfail /tmp/s5b.log
 expect "S5 version" "${BASE#v}" "$(omarchy-version)"
 
+echo "== S15 a rebase an updater from before the channels left in progress"
+GIT_SEQUENCE_EDITOR="sed -i 1s/^pick/edit/" git -C "$OMARCHY_PATH" rebase -q -i HEAD~1 >/dev/null 2>&1
+omarchy-update-ubuntu -y >/tmp/s15.log 2>&1; st=$?
+expect "S15 updater stops" 1 "$st"
+grep -q "rebase --abort" /tmp/s15.log && ok "S15 names the way out" || { ko "S15 names the way out"; onfail /tmp/s15.log; }
+git -C "$OMARCHY_PATH" rebase --abort
+omarchy-update-ubuntu -y >/tmp/s15b.log 2>&1; st=$?
+expect "S15 updater goes through once aborted" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s15b.log
+
 echo "== S6 channel switch"
 pin "$NEXT"
 # For the port's mise wrappers migration, which 4.5's declarations unlock: a
