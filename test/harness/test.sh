@@ -443,6 +443,22 @@ apps_after=$(common base_apps)
 [[ " $apps_before " == *" omacalc "* && " $apps_after " != *" omacalc "* ]] && ok "S19 a removed companion app is not rebuilt" || ko "S19 a removed companion app is not rebuilt ($apps_before -> $apps_after)"
 rm -f "$HOME/.local/state/omarchy/preinstalls-removed"
 
+echo "== S20 Intel's media stack: due at an update on the xe driver, unless declined"
+due() { (cd "$PORT" && env REPO_DIR="$PORT" "$@" ./install/13-intel-media-root.sh --due) >/dev/null 2>&1; echo $?; }
+# The container sees the host's PCI devices.
+xe=1
+for dev in /sys/bus/pci/drivers/xe/0000:*; do [[ $(cat "$dev/vendor" 2>/dev/null) == 0x8086 ]] && xe=0; done
+expect "S20 due only on an Intel GPU on xe" "$xe" "$(due)"
+expect "S20 due when OMARCHY_INTEL_MEDIA=1 asks" 0 "$(due OMARCHY_INTEL_MEDIA=1)"
+expect "S20 never due with OMARCHY_INTEL_MEDIA=0" 1 "$(due OMARCHY_INTEL_MEDIA=0)"
+sudo touch /etc/apt/preferences.d/omarchy-intel-graphics-media
+expect "S20 not due once the pin is in place" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
+sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media
+(cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester OMARCHY_INTEL_MEDIA=0 ./install/13-intel-media-root.sh) >/tmp/s20.log 2>&1 || { ko "S20 the step with OMARCHY_INTEL_MEDIA=0"; onfail /tmp/s20.log; }
+check "S20 declining leaves the user's marker" test -O "$PORT/.applied/13-intel-media-declined"
+expect "S20 not due once declined" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
+rm -f "$PORT/.applied/13-intel-media-declined"
+
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
 # bootstrap refuses a channel other than the recorded one: set aside, as a
