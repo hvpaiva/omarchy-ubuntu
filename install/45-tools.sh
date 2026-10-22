@@ -77,6 +77,9 @@ elif [[ -n $wireplumber_system && -f $SRC_DIR/wireplumber/build/meson-logs/insta
   quietly sudo ninja -C "$SRC_DIR/wireplumber/build" uninstall
   sudo ldconfig
   rm -rf "$SRC_DIR/wireplumber/build"
+  # Step 46's drop-in runs the binary just removed: it goes now, not at the end
+  # of an update that may stop before then and leave the next login without one.
+  "$REPO_DIR/install/46-audio-denoise.sh" --units
 fi
 
 # xdg-terminal-exec: Omarchy launches every terminal through it. It has no

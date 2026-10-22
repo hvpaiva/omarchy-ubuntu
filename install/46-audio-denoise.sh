@@ -6,12 +6,13 @@ source "${REPO_DIR:?}/lib/common.sh"
 need_user
 
 # WirePlumber, where noble's 0.4 is the system's: step 45's 0.5 in its place,
-# through a drop-in, and the running session moves to it at once. Without that
-# build, a drop-in for 0.4, which holds back all of its linking while any node
-# it manages has not finished activating: a filter-chain host (upstream's
-# speaker tuning, the denoise here) whose nodes outlive a WirePlumber restart
-# can leave one that never does, and then no stream on the machine is linked.
-# That drop-in restarts the hosts after WirePlumber, as at login.
+# through a drop-in. The running session moves at once when that drop-in comes
+# or goes, since it changes which binary runs. Without that build, a drop-in
+# for 0.4, which holds back all of its linking while any node it manages has
+# not finished activating: a filter-chain host (upstream's speaker tuning, the
+# denoise here) whose nodes outlive a WirePlumber restart can leave one that
+# never does, and then no stream on the machine is linked. That drop-in
+# restarts the hosts after WirePlumber, as at login.
 units() {
   local dir=$OMARCHY_HOME/.config/systemd/user changed=0 switched=0 file
   local filters=wireplumber.service.d/10-omarchy-filter-chains.conf
@@ -31,6 +32,7 @@ units() {
     rm -f "$dir/$file"
     note "unit removed: $file"
     changed=1
+    [[ $file != "$wp05" ]] || switched=1
   done
   for file in "${files[@]}"; do
     cmp -s "$REPO_DIR/config/systemd/user/$file" "$dir/$file" && continue
