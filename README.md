@@ -150,6 +150,25 @@ omarchy-update-ubuntu
 From then on the updater updates itself first, and stops with the same
 instructions if it finds a rebase that an earlier updater left in progress.
 
+### Upgrading Ubuntu (24.04 to 26.04)
+
+Ubuntu's own upgrade (`do-release-upgrade`, or Software Updater) is the way:
+it asks before it goes on with the packages that come from outside Ubuntu's
+archive (Hyprland from its PPA, Chromium, the `.deb` tools), turns every PPA
+and third-party source off, and makes sudo-rs the sudo. It may also ask about
+`/etc/cups/cups-files.conf`, which the port edits: either answer works, as the
+update after it puts the port's line back. Run
+`omarchy-update-ubuntu` once the machine is on 26.04. It sees the new release
+(`.applied/ubuntu-release`) and runs once what a bootstrap on it would: the
+sources at the new release and the apt packages from them, the `.deb` tools
+built per release, classic sudo, the sudoers rules and system tweaks,
+upstream's default packages the upgrade removed, and the Install menu's
+`.deb`s built per release (Sunshine, umu-launcher) in the new release's build.
+Then every build that lost a library to the upgrade (the companion apps,
+Quickshell, the tools) is rebuilt.
+Expect the sudo password a second time: the switch back to classic sudo starts
+a new credential cache.
+
 ### Channels
 
 Upstream's `omarchy-channel-set` picks a package ring; here it records the
