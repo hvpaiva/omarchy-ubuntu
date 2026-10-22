@@ -1,7 +1,7 @@
 From ce96945b65130a3990a04ceeab519184df3b057b Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
-Subject: [PATCH 01/11] Ubuntu port: dpkg/apt backend behind the Arch package
+Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
  helpers
 
 Each omarchy-pkg-* helper keeps upstream's body untouched and hands over to

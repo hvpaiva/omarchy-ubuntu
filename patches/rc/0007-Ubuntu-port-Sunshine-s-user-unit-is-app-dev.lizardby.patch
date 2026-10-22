@@ -1,7 +1,7 @@
 From e7f4a16d427a51b249e54d7c3251000e16a7bb3e Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Wed, 23 Sep 2026 11:50:14 -0300
-Subject: [PATCH 07/11] Ubuntu port: Sunshine's user unit is
+Subject: [PATCH 07/12] Ubuntu port: Sunshine's user unit is
  app-dev.lizardbyte.app.Sunshine
 
 LizardByte's Ubuntu .deb ships the user unit under its app id, not as sunshine.service.
