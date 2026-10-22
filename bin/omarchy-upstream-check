@@ -105,9 +105,13 @@ problem() { status=1; }
 # the port's patches were applied on, so a recipe added by a newer patch counts.
 resolver=""
 classify_pkg() {
-  local name=$1 apt n
+  local name=$1 apt n stem keys
   if [[ -n $resolver ]]; then
-    if grep -qE "^\s*\[$name\]=" "$resolver"; then
+    # The backend also looks a -bin or -git name up without the suffix.
+    stem=${name%-bin}
+    stem=${stem%-git}
+    keys=$(printf '%s\n' "$name" "$stem" | sed 's/[][\.*^$+?(){}|]/\\&/g' | paste -sd'|')
+    if grep -qE "^\s*\[($keys)\]=" "$resolver"; then
       echo "recipe or alias in omarchy-pkg-ubuntu"
       return 0
     fi
@@ -201,6 +205,44 @@ else
       echo "- removed \`$name\`: nothing to do, the port never installed it"
     fi
   done <"$work/removed"
+fi
+echo
+
+echo "## Package names in commands and menus"
+echo
+# What the lists do not hold: a menu entry, a setup command or an install
+# helper that asks for a package by name (lib/catalog.py), new at the target.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "Not read: python3 is missing here."
+else
+  for ref in "$base" "$target"; do
+    tree=$work/tree-${ref//[^A-Za-z0-9.]/_}
+    mkdir -p "$tree"
+    g archive "$ref" -- bin default config shell | tar -x -C "$tree"
+    python3 "$PORT_DIR/lib/catalog.py" --calls "$tree" >"$tree.calls"
+  done
+  base_calls=$work/tree-${base//[^A-Za-z0-9.]/_}.calls
+  target_calls=$work/tree-${target//[^A-Za-z0-9.]/_}.calls
+  comm -13 <(cut -f1 "$base_calls" | sort -u) <(cut -f1 "$target_calls" | sort -u) >"$work/calls-added"
+  if [[ ! -s $work/calls-added ]]; then
+    echo "No name new at $target."
+  else
+    while IFS= read -r name; do
+      where=$(awk -F'\t' -v n="$name" '$1 == n { print $2 " in `" $3 "`"; exit }' "$target_calls")
+      if [[ $name == *'$'* ]]; then
+        echo "- $where: a name computed at run time, read the command"
+      elif reason=$(classify_pkg "$name"); then
+        echo "- \`$name\`, $where: $reason"
+      elif awk -F'\t' -v n="$name" '$1 == n && $2 !~ /^(present|missing|drop|remove)$/ { found = 1 } END { exit !found }' "$target_calls"; then
+        echo "- \`$name\`, $where: **$reason**"
+        problem
+      else
+        # Only checked for or removed: on Ubuntu it is never there, which is
+        # right unless Ubuntu has it under another name.
+        echo "- \`$name\`, $where: $reason, only checked for or removed"
+      fi
+    done <"$work/calls-added"
+  fi
 fi
 echo
 
