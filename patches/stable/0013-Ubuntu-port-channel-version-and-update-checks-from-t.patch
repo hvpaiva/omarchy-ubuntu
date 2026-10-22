@@ -1,4 +1,4 @@
-From 3c3b03089db258402fcb96348ee0abeb8c338ff4 Mon Sep 17 00:00:00 2001
+From 3cd77858eea91f27a734b30d977ff4f3b3e8d39e Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Wed, 21 Oct 2026 09:52:18 -0300
 Subject: [PATCH 13/13] Ubuntu port: channel, version and update checks from

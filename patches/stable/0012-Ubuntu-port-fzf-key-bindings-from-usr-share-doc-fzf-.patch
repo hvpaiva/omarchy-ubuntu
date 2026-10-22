@@ -1,4 +1,4 @@
-From 77f1056dbb91e71790d0a874b859988525592e08 Mon Sep 17 00:00:00 2001
+From 11f2d1c8ff5889d3ccc85c1c7268127bb4c6b4a5 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Mon, 28 Sep 2026 00:37:13 -0300
 Subject: [PATCH 12/13] Ubuntu port: fzf key bindings from

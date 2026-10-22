@@ -1,4 +1,4 @@
-From b484dfff8b228e84ff6ba01c5d28004129b9619a Mon Sep 17 00:00:00 2001
+From 1561e6f470bbb5aaab55ab2ecea03493bacf46ff Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |    3 +
  bin/omarchy-pkg-present         |    3 +
  bin/omarchy-pkg-remove          |    3 +
- bin/omarchy-pkg-ubuntu          | 1034 +++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 1040 +++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |   13 +-
- 12 files changed, 1096 insertions(+), 1 deletion(-)
+ 12 files changed, 1102 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..59a4b4a4
+index 00000000..d835b83b
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,1034 @@
+@@ -0,0 +1,1040 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -441,6 +441,12 @@ index 00000000..59a4b4a4
 +  fi
 +}
 +
++# A conflict fails the install, as pacman's --noconfirm answers it, instead of
++# apt taking away a package of the user's to make room.
++apt_install() {
++  as_root apt-get install -y --no-remove "$@"
++}
++
 +base_name() {
 +  local name=${1%%[<>=]*}
 +  name=${name%-bin}
@@ -537,7 +543,7 @@ index 00000000..59a4b4a4
 +  for deb in "$@"; do
 +    debs+=("./$deb")
 +  done
-+  as_root apt-get install -y -- "${debs[@]}"
++  apt_install -- "${debs[@]}"
 +}
 +
 +keyring_path() {
@@ -578,7 +584,7 @@ index 00000000..59a4b4a4
 +  if ! repo_ready "$id"; then
 +    with_workdir add_repo "$id" || return 1
 +  fi
-+  as_root apt-get install -y "$@"
++  apt_install "$@"
 +}
 +
 +pool_index() {
@@ -674,7 +680,7 @@ index 00000000..59a4b4a4
 +  local name=$1
 +  shift
 +  if (( $# > 0 )); then
-+    as_root apt-get install -y "$@" || return 1
++    apt_install "$@" || return 1
 +  fi
 +  hook before_opr "$name" || return 1
 +  with_workdir fetch_and_install_opr "$name" || return 1
@@ -703,7 +709,7 @@ index 00000000..59a4b4a4
 +}
 +
 +before_opr_xpadneo_dkms() {
-+  as_root apt-get install -y "linux-headers-$(uname -r)"
++  apt_install "linux-headers-$(uname -r)"
 +}
 +
 +after_opr_xpadneo_dkms() {
@@ -728,7 +734,7 @@ index 00000000..59a4b4a4
 +}
 +
 +after_opr_hermes_desktop() {
-+  as_root apt-get install -y build-essential python3 git jq || return 1
++  apt_install build-essential python3 git jq || return 1
 +  with_workdir build_hermes_pty
 +}
 +
@@ -739,7 +745,7 @@ index 00000000..59a4b4a4
 +
 +install_flatpak() {
 +  # Ubuntu's desktop ships snap, not flatpak.
-+  command -v flatpak >/dev/null || as_root apt-get install -y flatpak || return 1
++  command -v flatpak >/dev/null || apt_install flatpak || return 1
 +  flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null ||
 +    as_root flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 +  flatpak install -y --noninteractive -- flathub "$1"
@@ -776,7 +782,7 @@ index 00000000..59a4b4a4
 +}
 +
 +install_i386() {
-+  enable_i386 && as_root apt-get install -y -- "$1:i386"
++  enable_i386 && apt_install -- "$1:i386"
 +}
 +
 +nvidia_gl_package() {
@@ -804,7 +810,7 @@ index 00000000..59a4b4a4
 +}
 +
 +install_custom_steam() {
-+  enable_i386 && as_root apt-get install -y steam-installer
++  enable_i386 && apt_install steam-installer
 +}
 +
 +installed_custom_steam() {
@@ -1104,7 +1110,7 @@ index 00000000..59a4b4a4
 +  done
 +
 +  if (( ${#apt_pkgs[@]} > 0 )); then
-+    as_root apt-get install -y -- "${apt_pkgs[@]}" || return 1
++    apt_install -- "${apt_pkgs[@]}" || return 1
 +  fi
 +  for recipe in "${recipes[@]}"; do
 +    with_recipe recipe_install "$recipe" || return 1
@@ -1180,7 +1186,7 @@ index 00000000..59a4b4a4
 +  [[ -n $names ]] || return 0
 +  source omarchy-sudo-keepalive
 +  # shellcheck disable=SC2086
-+  sudo apt-get install -y -- $names
++  apt_install -- $names
 +  omarchy-show-done
 +}
 +
