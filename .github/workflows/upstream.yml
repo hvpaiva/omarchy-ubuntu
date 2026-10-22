@@ -132,7 +132,7 @@ jobs:
           if [[ -z $release && -z $kinds ]]; then
             if [[ -n $number ]]; then
               if [[ $CHANNEL == edge ]]; then
-                gh issue close "$number" --comment "The rc series applies on upstream's $BRANCH again and every package name has a source."
+                gh issue close "$number" --comment "Nothing left for the edge channel: the rc series applies on upstream's $BRANCH and every package name it asks for has a source."
               else
                 gh issue close "$number" --comment "Nothing left for the $CHANNEL channel: its pin is $PIN, the newest ref it admits, and the port matches upstream there."
               fi
