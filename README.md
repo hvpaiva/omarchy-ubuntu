@@ -80,7 +80,7 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 |---|---|
 | `bootstrap.sh` | runs `install/*.sh` in order; `-root.sh` steps run as root |
 | `install/` | numbered steps: apt, extra .debs, Qt, toolchains, Omarchy checkout, Quickshell, tools, user, root, config, session, browser policy, PATH |
-| `lib/` | `channel.sh` (channels, their pins and series), `migrations.sh` (what the updater does with migrations that reach for Arch), `units.sh` (user units), `common.sh` |
+| `lib/` | `channel.sh` (channels, their pins and series), `migrations.sh` (what the updater does with migrations that reach for Arch), `units.sh` (user units), `catalog.py` (every package name an Omarchy tree can hand its package helpers), `common.sh` |
 | `migrations/` | the port's own migrations, run by the updater before upstream's for what its package upgrade would have done to the machine (`.applied/migrations/` records them; a `-root.sh` beside one is its root half) |
 | `versions.env` | pinned versions for everything cloned or downloaded, the Omarchy tag of each channel among them; `versions.rc.env` holds what the rc channel pins differently |
 | `patches/stable/` | the `ubuntu` branch of the Omarchy fork as `git am` patches (apt backend behind the package helpers, update and channel hand-offs, logout without uwsm, theme and app fixes), with the tag the series was cut on in `base`; each one touches as little of upstream as it can, so the next tag rebases without conflicts. A channel whose series differs gets its own directory (`patches/rc/`). `bin/omarchy-port-series` cuts a series from a fork branch. `patches/apps/` holds what `omarchy-build-app` applies to a companion app's source when noble's libraries are behind what it was written against |
@@ -89,7 +89,7 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `bin/` | `omarchy-update-ubuntu`, `omarchy-channel-ubuntu`, `omarchy-upstream-check`, `omarchy-port-series`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
 | `.github/workflows/upstream.yml` | weekly report of what the next Omarchy brings for each channel of the port, posted as issues |
 | `.github/workflows/test.yml` | the harness's scenarios on every pull request and push to main; the full bootstrap, per channel, when dispatched with its switch |
-| `test/harness/` | the container harness: `run.sh` (the updater and channel scenarios of `test.sh`) and `full.sh` (the bootstrap, steps 10 to 45, of `full-test.sh`), both on a clean Ubuntu 24.04 image |
+| `test/harness/` | the container harness: `run.sh` (the updater and channel scenarios of `test.sh`) and `full.sh` (the bootstrap, steps 10 to 45, of `full-test.sh`, then a check that every package name the checkout can ask for resolves), both on a clean Ubuntu 24.04 image |
 | `docs/` | deviations from upstream and the gotchas found while porting |
 
 ## Testing
@@ -171,7 +171,8 @@ omarchy-upstream-check --base v4.0.3 --target v4.0.4
 
 It works on a throwaway clone and reports, in Markdown: whether the port's
 patches rebase cleanly (and on which files they conflict), each package added
-or removed upstream with the Ubuntu source the port knows for it, the new
+or removed upstream with the Ubuntu source the port knows for it, each package
+name a menu entry or a command asks for that it did not before, the new
 migrations and whether they use Arch tooling, every change in the directories
 the port mirrors by hand, the `etc/` files step 57 neither installs nor lists
 as skipped, the new user units, and every version `versions.env` pins against
