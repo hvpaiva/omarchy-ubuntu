@@ -12,11 +12,15 @@ trap 'rm -rf "$work"' EXIT
 
 # The ref as the source repository resolves it: a pull request's checkout is
 # a detached merge commit that no branch of the clone would name.
-git clone -q "$repo" "$work/omarchy-ubuntu" && git -C "$work/omarchy-ubuntu" checkout -q "$(git -C "$repo" rev-parse "$ref")" || exit 2
+commit=$(git -C "$repo" rev-parse "$ref") || exit 2
+git clone -q "$repo" "$work/omarchy-ubuntu" && git -C "$work/omarchy-ubuntu" checkout -q "$commit" || exit 2
 docker build -q -t omarchy-ubuntu-harness "$here" >/dev/null || exit 2
-# Every step's full output outlives the container, under logs/<ref>/.
-logs=$here/logs/${ref//\//-}
-mkdir -p "$logs"
+# Every step's full output outlives the container, under logs/<channel>-<commit>/:
+# the ref as typed (HEAD, a branch) names neither of the two things a run tests.
+# full-test.sh writes there as tester (uid 1000); on a CI runner the host's
+# user is another uid, and a bind mount keeps the host's ownership.
+logs=$here/logs/${OMARCHY_CHANNEL:-stable}-${commit:0:12}
+mkdir -p "$logs" && chmod o+w "$logs"
 # apt's package cache and index lists persist across runs: after one good
 # fetch the PPAs are only asked for what changed. Docker volumes by default;
 # APT_CACHE_DIR=<dir> binds two directories there instead, which is what a CI

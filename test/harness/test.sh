@@ -42,7 +42,7 @@ git init -q --bare -b main /tmp/port.git
 git clone -q /src/omarchy-ubuntu "$PORT"
 git -C "$PORT" checkout -q -B main
 git -C "$PORT" remote set-url origin /tmp/port.git
-git -C "$PORT" push -q -u origin main 2>/dev/null
+git -C "$PORT" push -q -u origin main || { echo "the port's remote refused the push (a shallow source?)"; exit 2; }
 head=$(git -C "$PORT" rev-parse --short HEAD)
 echo "port at $head, branch $(git -C "$PORT" branch --show-current)"
 
