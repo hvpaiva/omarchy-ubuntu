@@ -10,21 +10,44 @@
 #
 #   13-intel-media-root.sh          the PPA's media stack, on an Intel GPU on xe
 #   13-intel-media-root.sh --undo   the PPA and the pin gone, noble's media stack back
+#   13-intel-media-root.sh --due    (as the user) whether the updater runs the step
 #
 # OMARCHY_INTEL_MEDIA=1 takes the PPA's stack whatever the driver; =0 never.
+# A machine bootstrapped before the step takes it at its next update. --undo
+# and =0 leave a marker in .applied, so the updates after them keep noble's.
 source "${REPO_DIR:?}/lib/common.sh"
-need_root
 
 ppa=ppa:kobuk-team/intel-graphics
 pin=/etc/apt/preferences.d/omarchy-intel-graphics-media
+declined=$REPO_DIR/.applied/13-intel-media-declined
 # The media stack is the pin's first stanza.
 read -ra media < <(sed -n 's/^Package: \([^*].*\)$/\1/p' "$REPO_DIR/etc/apt/preferences.d/omarchy-intel-graphics-media" | head -n1)
+
+xe_intel_gpu() {
+  local dev
+  for dev in /sys/bus/pci/drivers/xe/0000:*; do
+    [[ -e $dev && $(cat "$dev/vendor" 2>/dev/null) == 0x8086 ]] && return 0
+  done
+  return 1
+}
+
+if [[ ${1:-} == --due ]]; then
+  [[ ! -f $pin && ! -f $declined && ${OMARCHY_INTEL_MEDIA:-} != 0 ]] || exit 1
+  [[ ${OMARCHY_INTEL_MEDIA:-} == 1 ]] || xe_intel_gpu || exit 1
+  exit 0
+fi
+need_root
 
 installed_media() {
   local pkg
   for pkg in "${media[@]}"; do
     apt_installed "$pkg" && echo "$pkg"
   done
+}
+
+decline() {
+  install -d -o "$OMARCHY_USER" -g "$OMARCHY_USER" "$REPO_DIR/.applied"
+  install -m 644 -o "$OMARCHY_USER" -g "$OMARCHY_USER" /dev/null "$declined"
 }
 
 if [[ ${1:-} == --undo ]]; then
@@ -45,19 +68,14 @@ if [[ ${1:-} == --undo ]]; then
     log "noble's media stack: ${back[*]}"
     apt_retry install -y --no-remove --allow-downgrades "${back[@]}"
   fi
+  decline
   exit 0
 fi
 
-xe_intel_gpu() {
-  local dev
-  for dev in /sys/bus/pci/drivers/xe/0000:*; do
-    [[ -e $dev && $(cat "$dev/vendor" 2>/dev/null) == 0x8086 ]] && return 0
-  done
-  return 1
-}
 case ${OMARCHY_INTEL_MEDIA:-} in
   0)
     note "OMARCHY_INTEL_MEDIA=0: noble's media stack stays"
+    decline
     exit 0
     ;;
   1) ;;
@@ -92,4 +110,5 @@ fi
 mapfile -t here < <(installed_media)
 log "the PPA's media stack"
 apt_retry install -y --no-remove intel-media-va-driver-non-free libva2 libva-drm2 libva-wayland2 libvpl2 libmfx-gen1.2 vainfo "${here[@]}"
+rm -f "$declined"
 note "libva $(dpkg-query -W -f='${Version}' libva2), iHD $(dpkg-query -W -f='${Version}' intel-media-va-driver-non-free)"
