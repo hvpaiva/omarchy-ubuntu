@@ -194,7 +194,7 @@ check "S6 the admin's mpv.conf kept beside upstream's" sudo sh -c 'cmp -s /etc/m
 check "S6 upstream 1788163635 ran on the marker" test -f "$HOME/.local/state/omarchy/migrations/1788163635.sh"
 grep -q "Running migration (1788163635)" /tmp/s6.log && ok "S6 upstream 1788163635 ran, not marked" || ko "S6 upstream 1788163635 ran, not marked"
 expect "S6 the inhibitor runs under Arch's umask" 0022 "$(sort -u "$HOME/stay-awake.umask" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
-expect "S6 the inhibitor's leftover state no longer group-writable" "" "$(find "$inhibitor_state" -perm /022 2>/dev/null)"
+expect "S6 the inhibitor's leftover state no longer group-writable" "" "$(find "${inhibitor_state%/*}" -maxdepth 0 -perm /022 2>/dev/null; find "$inhibitor_state" -perm /022 2>/dev/null)"
 printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
 rm -f "$HOME/shims/mise"
 # 4.5's omarchy-update and omarchy-channel-set open with a sudo preamble that

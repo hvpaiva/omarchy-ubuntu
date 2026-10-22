@@ -53,15 +53,19 @@ fi
 
 trap 'echo -e "\n\033[0;31mSomething went wrong during the update. Review the output above (log in '"$LOG"').\033[0m"' ERR
 
-# Upstream's update inhibitor keeps its state in the runtime directory, and
-# 4.5's refuses a group-writable one: what 4.0's leaves under Ubuntu's umask
-# 002 (Arch's is 022). An update that crosses the two starts it on one and
-# stops it on the other, and the inhibitor would stay held. Arch's umask for
-# it, and what an earlier run left brought to what that umask makes.
+# Upstream's update inhibitor keeps its state in the runtime directory (in
+# /tmp/omarchy-<uid> without one, an ssh session's case), and 4.5's refuses a
+# group-writable one: what 4.0's leaves under Ubuntu's umask 002 (Arch's is
+# 022). An update that crosses the two starts it on one and stops it on the
+# other, and the inhibitor would stay held. Arch's umask for it, and what an
+# earlier run left brought to what that umask makes.
 stay_awake() {
-  local state=${XDG_RUNTIME_DIR:-/tmp/omarchy-$UID}/omarchy-update-stay-awake
-  if [[ -d $state && ! -L $state && -O $state ]]; then
-    chmod -R go-w -- "$state" 2>/dev/null || true
+  local base=${XDG_RUNTIME_DIR:-/tmp/omarchy-$UID}
+  if [[ -z ${XDG_RUNTIME_DIR:-} && -d $base && ! -L $base && -O $base ]]; then
+    chmod go-w -- "$base" 2>/dev/null || true
+  fi
+  if [[ -d $base/omarchy-update-stay-awake && ! -L $base/omarchy-update-stay-awake && -O $base/omarchy-update-stay-awake ]]; then
+    chmod -R go-w -- "$base/omarchy-update-stay-awake" 2>/dev/null || true
   fi
   (umask 022 && omarchy-update-stay-awake "$@")
 }
