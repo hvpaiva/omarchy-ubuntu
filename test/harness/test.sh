@@ -286,11 +286,23 @@ out=$(omarchy-update-available); st=$?
 expect "S7 update-available sees the port behind" 0 "$st"
 grep -q "omarchy-ubuntu 1 new commit" <<<"$out" && ok "S7 reports the port commit" || ko "S7 reports the port commit ($out)"
 grep -q "omarchy ${NEXT#v} -> ${BASE#v}" <<<"$out" && ok "S7 reports the pin the remote carries" || ko "S7 reports the pin the remote carries ($out)"
+# A change to a tracked file holds the port back, and the update says so twice.
+echo "# mine" >>"$PORT/README.md"
+omarchy-update-ubuntu -y >/tmp/s7a.log 2>&1; st=$?
+expect "S7 updater exit with the port held" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s7a.log
+grep -qE '^ +M README\.md' /tmp/s7a.log && ok "S7 a tracked change holds the port, listed" || { ko "S7 a tracked change holds the port, listed"; onfail /tmp/s7a.log; }
+grep -q "The port itself was not updated: it has local changes" /tmp/s7a.log && ok "S7 says it again at the end" || ko "S7 says it again at the end"
+expect "S7 port still behind" 1 "$(git -C "$PORT" rev-list --count HEAD..origin/main)"
+git -C "$PORT" checkout -q -- README.md
+# An untracked file, as an older port's dropped example leaves behind, does not.
+touch "$PORT/config/hypr/monitors.lua.example"
 omarchy-update-ubuntu -y >/tmp/s7.log 2>&1; st=$?
 expect "S7 updater exit" 0 "$st"
 [[ $st == 0 ]] || onfail /tmp/s7.log
 grep -q "restarting on the new copy" /tmp/s7.log && ok "S7 re-executed on the pulled copy" || ko "S7 re-executed on the pulled copy"
 expect "S7 pin from the pulled port applied" "$BASE" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
+rm -f "$PORT/config/hypr/monitors.lua.example"
 
 echo "== S16 sudo asks once on a terminal"
 # A password for tester, and an inhibitor that needs root without refreshing
