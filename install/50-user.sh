@@ -17,7 +17,9 @@ fonts=$OMARCHY_HOME/.local/share/fonts
 # stamped here and the cached archive dropped when it moves.
 stamp=$fonts/.nerd-fonts-version
 for family in JetBrainsMono CascadiaMono; do
-  if ! fc-list | grep -qi "${family/CascadiaMono/CaskaydiaMono}" || [[ $(cat "$stamp" 2>/dev/null) != "$NERD_FONTS_VERSION" ]]; then
+  # grep reads fc-list to its end: with -q it would quit at the first match,
+  # fc-list would die of SIGPIPE and pipefail would call the font missing.
+  if ! fc-list | grep -i "${family/CascadiaMono/CaskaydiaMono}" >/dev/null || [[ $(cat "$stamp" 2>/dev/null) != "$NERD_FONTS_VERSION" ]]; then
     rm -f "$DOWNLOADS/$family.tar.xz"
     github_release_download ryanoasis/nerd-fonts "$NERD_FONTS_VERSION" "$family.tar.xz"
     mkdir -p "$fonts" && tar -xJf "$DOWNLOADS/$family.tar.xz" -C "$fonts" --wildcards '*.ttf'
