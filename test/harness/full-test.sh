@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs inside the harness container as `tester`: the bootstrap on a clean
-# Ubuntu 24.04 as far as a container without a session goes (apt, debs, Qt,
+# Ubuntu as far as a container without a session goes (apt, debs, Qt,
 # toolchains, checkout, Quickshell, tools), then the versions that came out.
 set -u
 

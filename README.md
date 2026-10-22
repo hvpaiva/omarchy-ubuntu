@@ -100,7 +100,7 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `bin/` | `omarchy-update-ubuntu`, `omarchy-channel-ubuntu`, `omarchy-upstream-check`, `omarchy-port-series`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
 | `.github/workflows/upstream.yml` | `omarchy-upstream-check` per channel, daily and on every push that touches the pins, the series or the catalog: an issue per channel only while the port has something to do there (a newer ref to move to, a pin behind upstream, a patch that no longer applies, a package without an Ubuntu source), with how to settle it, closed by the first run that finds nothing left; every report in the run's summary |
 | `.github/workflows/test.yml` | the harness's scenarios on every pull request and push to main; the full bootstrap, per channel, when dispatched with its switch |
-| `test/harness/` | the container harness: `run.sh` (the updater and channel scenarios of `test.sh`) and `full.sh` (the bootstrap, steps 10 to 45, of `full-test.sh`, then a check that every package name the checkout can ask for resolves), both on a clean Ubuntu 24.04 image |
+| `test/harness/` | the container harness: `run.sh` (the updater and channel scenarios of `test.sh`) and `full.sh` (the bootstrap, steps 10 to 45, of `full-test.sh`, then a check that every package name the checkout can ask for resolves), both on a clean Ubuntu image: 24.04, or 26.04 with `UBUNTU=26.04` |
 | `docs/` | deviations from upstream and the gotchas found while porting |
 
 ## Testing
@@ -112,7 +112,7 @@ test/harness/run.sh "$PWD"                                   # scenarios: channe
 test/harness/full.sh "$PWD" HEAD 10 12 15 20 25 30 40 45     # a fresh bootstrap as far as a container goes; OMARCHY_CHANNEL=rc for the rc channel
 ```
 
-The bootstrap keeps apt's package cache and index lists in Docker volumes between runs (`CACHE=<name>` for a second pair, `APT_CACHE_DIR=<dir>` for bind-mounted directories), and every step's full output under `test/harness/logs/`. Steps 50 to 80 need a session and a real kernel: they only run on a machine.
+The bootstrap keeps apt's package cache and index lists in Docker volumes between runs (`CACHE=<name>` for a second pair, `APT_CACHE_DIR=<dir>` for bind-mounted directories), and every step's full output under `test/harness/logs/`. `UBUNTU=26.04` runs either script on 26.04, in an image, volumes and log directories of its own, with sudo-rs as its sudo as a fresh install has; `APT_MIRROR=<url>` builds the image's apt sources on a mirror closer than archive.ubuntu.com. Steps 50 to 80 need a session and a real kernel: they only run on a machine.
 
 ## Updating
 
