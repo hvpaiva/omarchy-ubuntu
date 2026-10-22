@@ -97,6 +97,8 @@ apt_retry() { # apt_retry <apt-get arguments...>
 git_checkout() {
   local dir=$1 url=$2 ref=$3
   if [[ -d $dir/.git ]]; then
+    # A repository moves now and then (tensaku's did): the clone follows the URL it is given.
+    git -C "$dir" remote set-url origin "$url"
     git -C "$dir" fetch --quiet --depth 1 origin "$ref" 2>/dev/null || git -C "$dir" fetch --quiet --tags origin
     git -C "$dir" -c advice.detachedHead=false checkout --quiet "$ref" 2>/dev/null || git -C "$dir" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
   else
