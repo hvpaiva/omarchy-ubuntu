@@ -38,15 +38,18 @@ if ! pkg-config --exists 'gtk4-layer-shell-0 >= 1.0'; then
   sudo ldconfig
 fi
 
-# xdg-terminal-exec: Omarchy launches every terminal through it.
-if ! have xdg-terminal-exec; then
+# xdg-terminal-exec: Omarchy launches every terminal through it. It has no
+# --version (that would launch a terminal), so the installed one is stamped.
+xte_stamp=$REPO_DIR/.applied/xdg-terminal-exec
+if [[ ! -x $LOCAL_BIN/xdg-terminal-exec || $(cat "$xte_stamp" 2>/dev/null) != "$XDG_TERMINAL_EXEC_VERSION" ]]; then
   log "xdg-terminal-exec $XDG_TERMINAL_EXEC_VERSION"
   git_checkout "$SRC_DIR/xdg-terminal-exec" https://github.com/Vladimir-csp/xdg-terminal-exec "$XDG_TERMINAL_EXEC_VERSION"
   install -m 0755 "$SRC_DIR/xdg-terminal-exec/xdg-terminal-exec" "$LOCAL_BIN/xdg-terminal-exec"
+  mkdir -p "$(dirname "$xte_stamp")" && echo "$XDG_TERMINAL_EXEC_VERSION" >"$xte_stamp"
 fi
 
 # hyprpicker: color picker binding and screenshot helpers.
-if ! have hyprpicker; then
+if ! want "$LOCAL_BIN/hyprpicker" "$HYPRPICKER_VERSION"; then
   log "hyprpicker $HYPRPICKER_VERSION"
   git_checkout "$SRC_DIR/hyprpicker" https://github.com/hyprwm/hyprpicker "$HYPRPICKER_VERSION"
   # C++23's <print> arrived with libstdc++ 14; noble's default g++ is 13.
