@@ -88,7 +88,8 @@ cmake_build() { # cmake_build <source dir> <build dir> <extra cmake args...>
     -DCMAKE_INSTALL_RPATH="$QT_DIR/lib" \
     "$@"
   cmake --build "$build" --parallel "$JOBS" >"$build/build.log" 2>&1 || {
-    grep -iE "error" "$build/build.log" | head -5 >&2
+    # || true: no "error" line (or no log yet) must not skip the die below.
+    grep -isE "error" "$build/build.log" | head -5 >&2 || true
     die "build failed, full log in $build/build.log"
   }
 }
@@ -167,7 +168,7 @@ build_qmake() {
   dir=$(src_of "$app")
   mkdir -p "$dir/build"
   (cd "$dir/build" && quietly "$QT_DIR/bin/qmake6" "$@" "../$app.pro" && make -j"$JOBS" >build.log 2>&1) || {
-    grep -iE "error" "$dir/build/build.log" | head -5 >&2
+    grep -isE "error" "$dir/build/build.log" | head -5 >&2 || true
     die "$app: build failed, full log in $dir/build/build.log"
   }
   # qmake adds an RPATH to the Qt lib dir for non-system Qt installs; keep it honest.
@@ -224,7 +225,7 @@ build_owe() {
   dir=$(src_of owe)
   [[ -d $dir/build ]] || quietly meson setup "$dir/build" "$dir" --prefix="$OMARCHY_HOME/.local" --buildtype=release
   ninja -C "$dir/build" >"$dir/build/build.log" 2>&1 || {
-    grep -iE "error" "$dir/build/build.log" | head -5 >&2
+    grep -isE "error" "$dir/build/build.log" | head -5 >&2 || true
     die "owe: build failed, full log in $dir/build/build.log"
   }
   quietly ninja -C "$dir/build" install
