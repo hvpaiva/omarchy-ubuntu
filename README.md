@@ -64,6 +64,17 @@ passwordless default keyring (see [docs/gotchas.md](docs/gotchas.md)).
 `OMARCHY_CHANNEL=rc` in front of the bootstrap follows upstream's release
 candidates instead of its releases; see [Channels](#channels).
 
+Step 47 installs upstream's default package set, what Omarchy's installer
+lays down on a new machine (the apps behind the default bindings, Docker,
+LibreOffice, the development libraries and the rest of
+`install/omarchy-base.packages`), through the same backend as the menu's
+Install entries. What Ubuntu already has is left as it is, what does not
+apply on Ubuntu is skipped with the reason, and a conflict with a package of
+yours fails that one install rather than removing yours. A machine
+bootstrapped before the step existed gets the set with
+`~/.local/share/omarchy-ubuntu/bootstrap.sh 47`; the updater never installs
+it, as upstream's update does not.
+
 Personal files are never overwritten: existing `~/.config/hypr/*.lua` and
 `~/.bashrc` are backed up with a `.bak-omarchy` suffix the first time and left
 alone afterwards; a terminal config that already exists is kept as it is.
