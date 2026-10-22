@@ -1,4 +1,4 @@
-From 45afbec49fb1a18d2537b0241c11bd9bd7048350 Mon Sep 17 00:00:00 2001
+From 1e0e41b66f0dc0aaac0eb8bff3ac9d3c2f59fbe5 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |    3 +
  bin/omarchy-pkg-present         |    3 +
  bin/omarchy-pkg-remove          |    3 +
- bin/omarchy-pkg-ubuntu          | 1050 +++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 1073 +++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |   13 +-
- 12 files changed, 1112 insertions(+), 1 deletion(-)
+ 12 files changed, 1135 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,14 +185,14 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..d994841b
+index 00000000..a8973409
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,1050 @@
+@@ -0,0 +1,1073 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
-+# omarchy:args=apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id <package...>
++# omarchy:args=apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id|release-refresh <package...>
 +# omarchy:hidden=true
 +# omarchy:requires-sudo=true
 +
@@ -207,6 +207,11 @@ index 00000000..d994841b
 +  *) OPR_URL=https://pkgs.omarchy.org/stable/x86_64 ;;
 +esac
 +OPR_STATE=/var/lib/omarchy-ubuntu/opr
++# The Ubuntu release (24.04 noble, 26.04 resolute): the .debs published once
++# per release follow it.
++# shellcheck disable=SC1091,SC2154  # os-release's own variables
++read -r UBUNTU_VERSION UBUNTU_CODENAME < <(. /etc/os-release && echo "$VERSION_ID $VERSION_CODENAME")
++REINSTALL_DEBS=0
 +
 +declare -A APT_ALIASES=(
 +  [vi]="vim-tiny"
@@ -265,8 +270,9 @@ index 00000000..d994841b
 +  [python-gobject]="python3-gi"
 +  [python-poetry-core]="python3-poetry-core"
 +  [nautilus-python]="python3-nautilus"
-+  [dotnet-runtime]="dotnet-runtime-8.0"
-+  [qemu-user-static-binfmt]="qemu-user-static"
++  [dotnet-runtime]="dotnet-runtime-10.0"
++  [qemu-user-static-binfmt]="qemu-user-static qemu-user-binfmt"
++  [tldr]="tldr tealdeer"
 +  [cups-pdf]="printer-driver-cups-pdf"
 +  [sof-firmware]="firmware-sof-signed"
 +  [vulkan-intel]="mesa-vulkan-drivers"
@@ -302,8 +308,8 @@ index 00000000..d994841b
 +  [bitwarden]="deb bitwarden https://vault.bitwarden.com/download/?app=desktop&platform=linux&variant=deb"
 +  [minecraft-launcher]="deb minecraft-launcher https://launcher.mojang.com/download/Minecraft.deb"
 +  [heroic-games-launcher-bin]="deb heroic github:Heroic-Games-Launcher/HeroicGamesLauncher:linux-amd64\.deb$"
-+  [sunshine]="deb sunshine github:LizardByte/Sunshine:ubuntu24\.04_amd64\.deb$"
-+  [umu-launcher]="deb umu-launcher github:Open-Wine-Components/umu-launcher:python3-umu-launcher_.*_amd64_ubuntu-noble\.deb$ github:Open-Wine-Components/umu-launcher:/umu-launcher_.*_all_ubuntu-noble\.deb$"
++  [sunshine]="deb sunshine github:LizardByte/Sunshine:ubuntu${UBUNTU_VERSION//./\\.}_amd64\.deb$"
++  [umu-launcher]="deb umu-launcher github:Open-Wine-Components/umu-launcher:python3-umu-launcher_.*_amd64_ubuntu-$UBUNTU_CODENAME\.deb$ github:Open-Wine-Components/umu-launcher:/umu-launcher_.*_all_ubuntu-$UBUNTU_CODENAME\.deb$"
 +  [once-bin]="opr once-bin"
 +  [omazed]="opr omazed"
 +  [omarchy-emacs]="opr omarchy-emacs emacs-pgtk"
@@ -333,12 +339,12 @@ index 00000000..d994841b
 +  [owe-lockfeed]="custom owe-lockfeed"
 +  [signed]="custom signed"
 +  [omarchy-hyprland-titlebars]="custom omarchy-hyprland-titlebars"
-+  [qt6-base]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
-+  [qt6-declarative]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
-+  [qt6-multimedia]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
-+  [qt6-svg]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
-+  [qt6-wayland]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
-+  [qt6-imageformats]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
++  [qt6-base]="skip provided by the port's Qt in ~/.local/opt/Qt, Ubuntu's (noble 6.4, 26.04 6.10) is too old for these apps"
++  [qt6-declarative]="skip provided by the port's Qt in ~/.local/opt/Qt, Ubuntu's (noble 6.4, 26.04 6.10) is too old for these apps"
++  [qt6-multimedia]="skip provided by the port's Qt in ~/.local/opt/Qt, Ubuntu's (noble 6.4, 26.04 6.10) is too old for these apps"
++  [qt6-svg]="skip provided by the port's Qt in ~/.local/opt/Qt, Ubuntu's (noble 6.4, 26.04 6.10) is too old for these apps"
++  [qt6-wayland]="skip provided by the port's Qt in ~/.local/opt/Qt, Ubuntu's (noble 6.4, 26.04 6.10) is too old for these apps"
++  [qt6-imageformats]="skip provided by the port's Qt in ~/.local/opt/Qt, Ubuntu's (noble 6.4, 26.04 6.10) is too old for these apps"
 +  [expac]="skip pacman tooling; the port's packages come through dpkg and apt"
 +  [pacman-contrib]="skip pacman tooling; the port's packages come through dpkg and apt"
 +  [yay]="skip the AUR helper; the port has no AUR"
@@ -539,12 +545,13 @@ index 00000000..d994841b
 +}
 +
 +install_local_debs() {
-+  local -a debs=()
++  local -a debs=() again=()
 +  local deb
 +  for deb in "$@"; do
 +    debs+=("./$deb")
 +  done
-+  apt_install -- "${debs[@]}"
++  (( ! REINSTALL_DEBS )) || again=(--reinstall)
++  apt_install "${again[@]}" -- "${debs[@]}"
 +}
 +
 +keyring_path() {
@@ -1127,6 +1134,21 @@ index 00000000..d994841b
 +  done
 +}
 +
++# After an Ubuntu release upgrade (the port's updater runs this): each .deb a
++# recipe took in one release's build, installed, again in this release's.
++# The builds may share a version (umu's do), so apt reinstalls them.
++release_refresh() {
++  local name recipe failed=0
++  for name in "${!RECIPES[@]}"; do
++    recipe=${RECIPES[$name]}
++    [[ $recipe == "deb "* && ($recipe == *"ubuntu-$UBUNTU_CODENAME"* || $recipe == *"ubuntu${UBUNTU_VERSION//./\\.}"*) ]] || continue
++    with_recipe recipe_installed "$recipe" || continue
++    echo "$name: Ubuntu $UBUNTU_VERSION's build"
++    REINSTALL_DEBS=1 with_recipe recipe_install "$recipe" || failed=1
++  done
++  return "$failed"
++}
++
 +remove() {
 +  local pkg name recipe
 +  local -a debs=() snaps=()
@@ -1234,8 +1256,9 @@ index 00000000..d994841b
 +pick-install) pick_install ;;
 +pick-remove) pick_remove ;;
 +launch-id) launch_id "${1:?package name required}" "${2:?desktop id required}" ;;
++release-refresh) release_refresh ;;
 +*)
-+  echo "Usage: omarchy-pkg-ubuntu apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id <package...>" >&2
++  echo "Usage: omarchy-pkg-ubuntu apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id|release-refresh <package...>" >&2
 +  exit 1
 +  ;;
 +esac
