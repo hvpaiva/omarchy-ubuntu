@@ -12,23 +12,23 @@ need_root
 log "apt pin: only chromium* from the xtradeb PPA"
 install_file 644 /etc/apt/preferences.d/omarchy-xtradeb-chromium <"$REPO_DIR/etc/apt/preferences.d/omarchy-xtradeb-chromium"
 
-if ! grep -rqs 'xtradeb/apps' /etc/apt/sources.list.d/; then
-  log "xtradeb PPA"
-  # -n: add-apt-repository's own update shrugs off an index it could not
-  # fetch, and chromium then has no candidate; the apt_retry update does not.
-  add-apt-repository -y -n ppa:xtradeb/apps
-fi
+log "xtradeb PPA"
+ppa_source xtradeb/apps
 apt_retry update -qq
 
 # The pin must hold: an upgrade may take nothing from the PPA, and installing
-# Chromium may take nothing but chromium* from it.
-if LC_ALL=C apt-get -s dist-upgrade | grep '^Inst ' | grep xtradeb | grep -vqE '^Inst chromium(-[a-z0-9-]+)? '; then
-  LC_ALL=C apt-get -s dist-upgrade | grep '^Inst ' | grep xtradeb >&2
+# Chromium may take nothing but chromium* from it. One awk reads each plan
+# whole: a grep -q that quits at the first stray line can kill the commands
+# before it with SIGPIPE, which pipefail turns into no match.
+stray() { awk '/^Inst / && /xtradeb/ && !/^Inst chromium(-[a-z0-9-]+)? /'; }
+plan=$(LC_ALL=C apt-get -s dist-upgrade | stray)
+if [[ -n $plan ]]; then
+  echo "$plan" >&2
   die "the pin is not holding: an upgrade would pull the packages above from the xtradeb PPA"
 fi
-plan=$(LC_ALL=C apt-get -s install --no-install-recommends chromium chromium-sandbox)
-if grep '^Inst ' <<<"$plan" | grep xtradeb | grep -vqE '^Inst chromium(-[a-z0-9-]+)? '; then
-  grep '^Inst ' <<<"$plan" | grep xtradeb >&2
+plan=$(LC_ALL=C apt-get -s install --no-install-recommends chromium chromium-sandbox | stray)
+if [[ -n $plan ]]; then
+  echo "$plan" >&2
   die "installing chromium would pull other packages from the xtradeb PPA"
 fi
 

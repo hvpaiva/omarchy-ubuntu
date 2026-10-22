@@ -9,8 +9,9 @@ source "${REPO_DIR:?}/lib/common.sh"
 #   fastfetch: Omarchy's system summary; noble has no package.
 #   LocalSend: the Super+Ctrl+S share menu (`localsend --headless send`).
 #   Voxtype: dictation (Super+Ctrl+X / F9); the .deb ships the CPU, Vulkan and OSD variants.
-#   Ghostty: Omarchy's default terminal, in mkasberg/ghostty-ubuntu's build for 24.04;
-#     its revision is -ppa2 in the tag, .ppa2 in the asset and ~ppa2 in dpkg.
+#   Ghostty: Omarchy's default terminal, in mkasberg/ghostty-ubuntu's build for
+#     this Ubuntu release; its revision is -ppa2 in the tag, .ppa2 in the asset
+#     and ~ppa2 in dpkg.
 #   Aether: the theming app. Omarchy's own package installs the release binary
 #   rather than building it; the release also ships a .deb, built on Ubuntu 24.04.
 debs() {
@@ -19,7 +20,7 @@ gum charmbracelet/gum v$GUM_VERSION gum_${GUM_VERSION}_amd64.deb $GUM_VERSION
 fastfetch fastfetch-cli/fastfetch $FASTFETCH_VERSION fastfetch-linux-amd64.deb $FASTFETCH_VERSION
 localsend localsend/localsend v$LOCALSEND_VERSION LocalSend-${LOCALSEND_VERSION}-linux-x86-64.deb $LOCALSEND_VERSION
 voxtype peteonrails/voxtype v$VOXTYPE_VERSION voxtype_${VOXTYPE_VERSION}-1_amd64.deb $VOXTYPE_VERSION
-ghostty mkasberg/ghostty-ubuntu ${GHOSTTY_DEB/.ppa/-ppa} ghostty_${GHOSTTY_DEB}_amd64_24.04.deb ${GHOSTTY_DEB/.ppa/\~ppa}
+ghostty mkasberg/ghostty-ubuntu ${GHOSTTY_DEB/.ppa/-ppa} ghostty_${GHOSTTY_DEB}_amd64_${UBUNTU_VERSION}.deb ${GHOSTTY_DEB/.ppa/\~ppa}
 EOF
   # One of upstream's preinstalls: omarchy-remove-preinstalls drops it and leaves
   # this marker, and no update of upstream's brings a dropped one back.

@@ -458,6 +458,43 @@ sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media
 check "S20 declining leaves the user's marker" test -O "$PORT/.applied/13-intel-media-declined"
 expect "S20 not due once declined" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
 rm -f "$PORT/.applied/13-intel-media-declined"
+# The archive's stack as apt-cache madison reports it, with Intel's PPA ahead:
+# the PPA's lines never count as the archive's.
+fake_madison() { # fake_madison <libva2> <intel-media-va-driver>
+  cat >"$HOME/shims/apt-cache" <<EOF
+#!/bin/bash
+[[ \$1 == madison ]] || exec /usr/bin/apt-cache "\$@"
+ppa="https://ppa.launchpadcontent.net/kobuk-team/intel-graphics/ubuntu noble/main amd64 Packages"
+case \$2 in
+  libva2) echo " libva2 | 2.99.0-1~ppa1 | \$ppa"; echo " libva2 | $1 | http://archive.ubuntu.com/ubuntu x/main amd64 Packages" ;;
+  intel-media-va-driver) echo " intel-media-va-driver | 99.1.0-1~ppa1 | \$ppa"; echo " intel-media-va-driver | $2 | http://archive.ubuntu.com/ubuntu x/universe amd64 Packages" ;;
+esac
+EOF
+  chmod +x "$HOME/shims/apt-cache"
+}
+fake_madison 2.24.1-1 26.3.2+dfsg1-1
+expect "S20 not due where the archive's own stack drives xe (26.04)" 1 "$(due)"
+sudo touch /etc/apt/preferences.d/omarchy-intel-graphics-media
+expect "S20 due there to retire the PPA an install on noble took" 0 "$(due)"
+expect "S20 OMARCHY_INTEL_MEDIA=1 keeps the PPA there" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
+sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media
+fake_madison 2.20.0-1build1 24.1.0+dfsg1-1
+expect "S20 noble's archive behind the PPA: due only on xe" "$xe" "$(due)"
+rm -f "$HOME/shims/apt-cache"
+
+echo "== R1 apt sources: a PPA counts only enabled, at this release"
+# A release upgrade leaves every PPA's file in place, turned off (Enabled: no)
+# and at the old release; the steps add the PPA again at the new one.
+codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+test_source() { printf '%bTypes: deb\nURIs: https://ppa.launchpadcontent.net/omarchy/test/ubuntu/\nSuites: %s\nComponents: main\n' "$1" "$2" | sudo tee /etc/apt/sources.list.d/omarchy-test.sources >/dev/null; }
+active() { common "apt_source_active https://ppa.launchpadcontent.net/omarchy/test/ubuntu $codename && echo yes || echo no"; }
+test_source 'Enabled: no\n' "$codename"
+expect "R1 a source turned off does not count" no "$(active)"
+test_source "" oldrelease
+expect "R1 a source at another release does not count" no "$(active)"
+test_source "" "$codename"
+expect "R1 an enabled source at this release counts" yes "$(active)"
+sudo rm -f /etc/apt/sources.list.d/omarchy-test.sources
 
 echo "== S22 WirePlumber's drop-ins follow the WirePlumber on the machine"
 wp_dir=$HOME/.config/systemd/user/wireplumber.service.d

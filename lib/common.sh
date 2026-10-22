@@ -20,6 +20,10 @@ QT_DIR=${QT_DIR:-$OMARCHY_HOME/.local/opt/Qt/$QT_VERSION/gcc_64}
 LOCAL_BIN=$OMARCHY_HOME/.local/bin
 DOWNLOADS=$REPO_DIR/downloads
 JOBS=${JOBS:-$(nproc)}
+# The Ubuntu release (24.04 noble, 26.04 resolute): the sources and assets
+# published per release follow it.
+# shellcheck disable=SC1091,SC2034,SC2154  # os-release's own variables; UBUNTU_VERSION for the steps
+read -r UBUNTU_VERSION UBUNTU_CODENAME < <(. /etc/os-release && echo "$VERSION_ID $VERSION_CODENAME")
 
 log() { printf '\e[32m==> %s\e[0m\n' "$*"; }
 note() { printf '    %s\n' "$*"; }
@@ -68,6 +72,34 @@ backup_once() {
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# wayland_compat_cflags: what a build against Qt's private Wayland headers
+# needs. Qt >= 6.10's qwayland-wayland.h declares wl_fixes, which only exists in
+# libwayland >= 1.23's generated header; noble ships 1.22 (26.04 1.24). There a
+# client header generated from a newer protocol XML, sharing the system one's
+# WAYLAND_CLIENT_PROTOCOL_H guard, shadows it at compile time only: nothing
+# needs wl_fixes at runtime.
+wayland_compat_cflags() {
+  pkg-config --atleast-version=1.23 wayland-client && return 0
+  local compat=$SRC_DIR/quickshell-compat/include
+  if [[ ! -f $compat/wayland-client-protocol.h ]]; then
+    log "compat header from wayland $WAYLAND_XML_VERSION protocol XML" >&2
+    mkdir -p "$compat" &&
+      curl -fsSL -o "$SRC_DIR/quickshell-compat/wayland-$WAYLAND_XML_VERSION.xml" \
+        "https://gitlab.freedesktop.org/wayland/wayland/-/raw/$WAYLAND_XML_VERSION/protocol/wayland.xml" &&
+      cp /usr/include/wayland-client.h "$compat/wayland-client.h" &&
+      wayland-scanner client-header "$SRC_DIR/quickshell-compat/wayland-$WAYLAND_XML_VERSION.xml" "$compat/wayland-client-protocol.h" ||
+      return 1
+  fi
+  echo "-I$compat"
+}
+
+# cxx23: a compiler with C++23's <print> (libstdc++ 14). The default g++ where
+# it is that new: the PPA's Hyprland libraries are built with it, and an older
+# libstdc++ cannot link against them. noble's default is 13, so g++-14 there.
+cxx23() {
+  if (( $(g++ -dumpversion | cut -d. -f1) >= 14 )); then echo g++; else echo g++-14; fi
+}
 
 # quietly <command...>: its output only when it fails. The build tools put
 # their errors on stdout, so `>/dev/null` would leave a failed step mute.
@@ -126,6 +158,25 @@ github_release_download() {
 
 # apt_installed <pkg>
 apt_installed() { [[ $(dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null) == ?i* ]]; }
+
+# apt_source_active <uri> <suite>: an enabled apt source serves the suite from
+# the URI. A release upgrade turns every third-party source off (Enabled: no)
+# and leaves it at the old release, so its file alone says nothing. grep reads
+# to the end: a -q quitting early would leave apt-get a SIGPIPE, which
+# pipefail turns into a no.
+apt_source_active() {
+  # shellcheck disable=SC2016  # apt's own format fields
+  apt-get indextargets --no-release-info --format '$(REPO_URI) $(RELEASE)' 2>/dev/null | grep -xF "${1%/}/ $2" >/dev/null
+}
+
+# ppa_source <owner/name>: the PPA, at this release. One the upgrade turned off
+# stays as it left it, beside the new one.
+ppa_source() {
+  apt_source_active "https://ppa.launchpadcontent.net/$1/ubuntu" "$UBUNTU_CODENAME" && return 0
+  # -n: add-apt-repository's own update shrugs off an index it could not
+  # fetch; the apt_retry update after it does not.
+  add-apt-repository -y -n "ppa:$1"
+}
 
 # removed_preinstalls: what Remove > Preinstalls took away (the names upstream's
 # omarchy-remove-preinstalls drops), while its marker stands; nothing otherwise.
