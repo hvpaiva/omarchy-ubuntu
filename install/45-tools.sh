@@ -99,3 +99,5 @@ if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION"; then
 fi
 
 "$REPO_DIR/bin/omarchy-build-qt-apps"
+# The companion apps the menu or a migration installed follow their pins too.
+"$REPO_DIR/bin/omarchy-build-app" --installed
