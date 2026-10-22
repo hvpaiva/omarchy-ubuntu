@@ -52,7 +52,20 @@ if ! omarchy-update-lock held; then
 fi
 
 trap 'echo -e "\n\033[0;31mSomething went wrong during the update. Review the output above (log in '"$LOG"').\033[0m"' ERR
-trap 'omarchy-update-stay-awake stop' EXIT
+
+# Upstream's update inhibitor keeps its state in the runtime directory, and
+# 4.5's refuses a group-writable one: what 4.0's leaves under Ubuntu's umask
+# 002 (Arch's is 022). An update that crosses the two starts it on one and
+# stops it on the other, and the inhibitor would stay held. Arch's umask for
+# it, and what an earlier run left brought to what that umask makes.
+stay_awake() {
+  local state=${XDG_RUNTIME_DIR:-/tmp/omarchy-$UID}/omarchy-update-stay-awake
+  if [[ -d $state && ! -L $state && -O $state ]]; then
+    chmod -R go-w -- "$state" 2>/dev/null || true
+  fi
+  (umask 022 && omarchy-update-stay-awake "$@")
+}
+trap 'stay_awake stop' EXIT
 
 # On a terminal sudo asks there; from the shell's menu the polkit dialog asks.
 run_root() {
@@ -154,10 +167,10 @@ at_target() {
 
 if [[ -z $target ]]; then
   echo "dev channel: the $BRANCH branch is left as it is."
-  omarchy-update-stay-awake start
+  stay_awake start
 elif at_target; then
   echo "The checkout is already at $target."
-  omarchy-update-stay-awake start
+  stay_awake start
 else
   whats_new="What's new: https://github.com/omacom/omarchy/compare/$base_before...${target#origin/}"
   [[ $target != v* ]] || whats_new="What's new: https://github.com/omacom/omarchy/releases/tag/$target"
@@ -177,7 +190,7 @@ else
     exit 0
   fi
 
-  omarchy-update-stay-awake start
+  stay_awake start
 
   if [[ -n $OMARCHY_FORK ]]; then
     # A fork's branch is the user's to carry; a rebase keeps what they added.
@@ -434,7 +447,7 @@ if [[ -n $shell_errors ]]; then
   echo -e "\e[33mIf upstream raised the minimum Quickshell version, rebuild it: $PORT_DIR/bootstrap.sh 40\e[0m"
 fi
 
-omarchy-update-stay-awake stop
+stay_awake stop
 trap - EXIT
 
 echo

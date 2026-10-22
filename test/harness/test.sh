@@ -161,7 +161,14 @@ sed 's/ owed\.service"/ my-thing.service"/' "$PORT/config/hypr/autostart.lua" >"
 # A file of the admin's at a path 4.5 ships and 4.0.x does not: kept beside while on rc, back on the switch back.
 sudo mkdir -p /etc/mpv
 echo "# the admin's" | sudo tee /etc/mpv/mpv.conf >/dev/null
-omarchy-channel-ubuntu set rc >/tmp/s6.log 2>&1; st=$?
+# The update inhibitor's state as 4.0's leaves it under Ubuntu's umask 002,
+# which 4.5's refuses; and an inhibitor that tells which umask it ran under.
+inhibitor_state=${XDG_RUNTIME_DIR:-/tmp/omarchy-$UID}/omarchy-update-stay-awake
+(umask 002 && mkdir -p "$inhibitor_state" && echo 4242 >"$inhibitor_state/inhibit-pid")
+printf '#!/bin/bash\numask >>"$HOME/stay-awake.umask"\n' >"$HOME/shims/omarchy-update-stay-awake"
+rm -f "$HOME/stay-awake.umask"
+# Under Ubuntu's umask, as a desktop session runs it (a container's is 022).
+(umask 002 && omarchy-channel-ubuntu set rc) >/tmp/s6.log 2>&1; st=$?
 expect "S6 set rc exit" 0 "$st"
 [[ $st == 0 ]] || onfail /tmp/s6.log
 expect "S6 current" rc "$(omarchy-channel-current)"
@@ -186,6 +193,9 @@ check "S6 fcitx5 glyphs fetched before the theme migration" test -s /usr/share/f
 check "S6 the admin's mpv.conf kept beside upstream's" sudo sh -c 'cmp -s /etc/mpv/mpv.conf "$1" && grep -qx "# the admin.s" /etc/mpv/mpv.conf.bak-omarchy' _ "$OMARCHY_PATH/etc/mpv/mpv.conf"
 check "S6 upstream 1788163635 ran on the marker" test -f "$HOME/.local/state/omarchy/migrations/1788163635.sh"
 grep -q "Running migration (1788163635)" /tmp/s6.log && ok "S6 upstream 1788163635 ran, not marked" || ko "S6 upstream 1788163635 ran, not marked"
+expect "S6 the inhibitor runs under Arch's umask" 0022 "$(sort -u "$HOME/stay-awake.umask" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+expect "S6 the inhibitor's leftover state no longer group-writable" "" "$(find "$inhibitor_state" -perm /022 2>/dev/null)"
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
 rm -f "$HOME/shims/mise"
 # 4.5's omarchy-update and omarchy-channel-set open with a sudo preamble that
 # narrows PATH; the port's hand-off must come before it.
