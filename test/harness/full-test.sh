@@ -7,8 +7,9 @@ set -u
 export HOME=/home/tester
 PORT=$HOME/.local/share/omarchy-ubuntu
 # The source is bind-mounted from the host's user, not the container's (a CI
-# runner is uid 1001, tester is 1000): git would refuse it as dubious.
-git config --global --add safe.directory /src/omarchy-ubuntu
+# runner is uid 1001, tester is 1000): git would refuse it as dubious. For a
+# clone's source git matches the git directory itself, not the work tree.
+git config --global --add safe.directory /src/omarchy-ubuntu/.git
 git clone -q /src/omarchy-ubuntu "$PORT"
 cd "$PORT" || exit 2
 export DEBIAN_FRONTEND=noninteractive OMARCHY_ROOT_VIA=sudo
