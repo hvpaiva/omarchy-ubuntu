@@ -1,8 +1,8 @@
 #!/bin/bash
 # System-side pieces (root): classic sudo where sudo-rs is the default (--sudo
-# does only that), the dev link, login-shell env, sudo secure_path, polkit,
-# PAM stacks for the shell's lock screen and the polkit dialog, the screen
-# recorder's KMS server with the capability it needs.
+# does only that), the dev link, the uwsm session env, login-shell env, sudo
+# secure_path, polkit, PAM stacks for the shell's lock screen and the polkit
+# dialog, the screen recorder's KMS server with the capability it needs.
 source "${REPO_DIR:?}/lib/common.sh"
 need_root
 
@@ -21,6 +21,24 @@ gsr_kms_server() {
 }
 if [[ ${1:-} == --gsr-kms-server ]]; then
   gsr_kms_server
+  exit 0
+fi
+
+# Upstream's package puts default/uwsm/env.d/10-omarchy in /usr/share/uwsm/env.d,
+# where uwsm (0.26.1 and later) reads the session's environment; a link through
+# the dev link follows the checkout as the package's file follows the package.
+# An older uwsm (26.04's 0.25.2) gets the same file from step 50's block in
+# ~/.config/uwsm/env. The updater runs only this (--session-env) while the link
+# is missing.
+session_env() {
+  local link=/usr/share/uwsm/env.d/10-omarchy target=/usr/share/omarchy/default/uwsm/env.d/10-omarchy
+  [[ $(readlink "$link" 2>/dev/null) == "$target" ]] && return 0
+  log "uwsm session env: $link -> $target"
+  install -d /usr/share/uwsm/env.d
+  ln -sfn "$target" "$link"
+}
+if [[ ${1:-} == --session-env ]]; then
+  session_env
   exit 0
 fi
 
@@ -63,6 +81,8 @@ fi
 install_file 644 /etc/omarchy.conf <<EOF
 export OMARCHY_PATH="$OMARCHY_PATH"
 EOF
+
+session_env
 
 log "login shells (upstream: /etc/profile.d/omarchy.sh); real users only, so root's PATH stays clean"
 install_file 644 /etc/profile.d/omarchy.sh <<EOF

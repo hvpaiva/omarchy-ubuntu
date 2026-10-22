@@ -444,6 +444,13 @@ if [[ -f $HOME/.local/bin/gsr-kms-server ]]; then
   echo "gpu-screen-recorder's KMS server goes to /usr/local/bin with cap_sys_admin (root)."
   run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/55-root.sh" --gsr-kms-server
 fi
+# The session env is upstream's own env.d file, linked by step 55; once the
+# link is there, step 50 drops the block that stood in for it.
+if [[ $(readlink /usr/share/uwsm/env.d/10-omarchy 2>/dev/null) != /usr/share/omarchy/default/uwsm/env.d/10-omarchy ]]; then
+  echo "uwsm's session env from upstream's env.d file (root)."
+  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/55-root.sh" --session-env
+fi
+REPO_DIR=$PORT_DIR "$PORT_DIR/install/50-user.sh" --uwsm-env
 
 # Intel's media stack for a GPU on the xe driver (step 13), on a machine
 # bootstrapped before the step; one whose owner undid it keeps the archive's.

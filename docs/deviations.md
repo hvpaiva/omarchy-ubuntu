@@ -20,7 +20,7 @@ for, so on a release that has it the port takes Ubuntu's own.
 | vipsthumbnail | `--path` (libvips 8.16+) | noble: `/usr/local/bin/vipsthumbnail` wrapper turning `--path` into `-o`. 26.04: libvips 8.18's own; the wrapper an upgrade leaves behind goes | noble ships libvips 8.15; a wrapper instead of a patch on `omarchy-menu-images`, which upstream rewrites often |
 | Neovim | Arch's `neovim` | noble: `ppa:neovim-ppa/stable`. 26.04: the archive's (0.11) | Omarchy's editor config is LazyVim's, which wants neovim 0.11.2; noble's archive has 0.9 and the PPA publishes nothing for 26.04 |
 | I/O scheduler | `60-omarchy-io-scheduler.rules` sets kyber (built into Omarchy's kernel) | same rule plus `modules-load.d/omarchy-kyber.conf`, once the rule is in the checkout's tag | kyber is a module on Ubuntu's kernel |
-| Session env | `/usr/share/uwsm/env.d/10-omarchy` | block in `~/.config/uwsm/env` and at the top of `~/.bashrc`; Lua glue in `hyprland.lua` for the direct GDM entry | the PPA's uwsm 0.26 ignores `env.d`; the direct entry has no login shell |
+| Session env | `/usr/share/uwsm/env.d/10-omarchy` | the same file, linked by step 55 into the checkout through `/usr/share/omarchy`; where uwsm is older than 0.26.1 (26.04's 0.25.2), a block in `~/.config/uwsm/env` sources it; a block at the top of `~/.bashrc`; Lua glue in `hyprland.lua` for the direct GDM entry | uwsm reads `env.d` from 0.26.1 on; the direct entry has no login shell |
 | User units | started by `graphical-session.target` | same under uwsm; `autostart.lua` also starts them for the direct entry | `graphical-session.target` refuses manual start |
 | Lock PAM | `system-local-login` + `pam_faillock` | `pam_unix`/`pam_sss` stack, `common-account`; fingerprint in its own stack | no faillock on Ubuntu; the 4.5 fingerprint and FIDO2 setups write `include system-auth`, which would have to become `@include common-auth` here |
 | Polkit PAM | `/etc/pam.d/polkit-1` written by the fingerprint setup | same file, Ubuntu modules | Ubuntu has no `polkit-1` PAM file; the dialog needs it to show fingerprint mode |
@@ -68,7 +68,7 @@ user's home, so a dotfiles layer must treat them as Omarchy's, not the user's:
 | Path | Upstream location |
 |---|---|
 | `~/.config/systemd/user/omarchy-*.service`, `bt-agent.service`, `voxtype.service` | `/usr/lib/systemd/user/` |
-| `~/.config/uwsm/env` (the `omarchy-ubuntu env-bootstrap` block) | `/usr/share/uwsm/env.d/10-omarchy` |
+| `~/.config/uwsm/env` (the `omarchy-ubuntu env-bootstrap` block, only where uwsm is older than 0.26.1) | `/usr/share/uwsm/env.d/10-omarchy` |
 | `~/.config/fontconfig/conf.d/50-omarchy.conf` | `/etc/fonts/conf.d/50-omarchy.conf` |
 | `~/.config/environment.d/10-omarchy-fcitx.conf` | `/usr/lib/environment.d/` |
 | `~/.config/omarchy/hooks/post-update.d/{install-voxtype,setup-fingerprint}.hook` | package post-install |
