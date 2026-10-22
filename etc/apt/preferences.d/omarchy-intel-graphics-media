@@ -1,0 +1,11 @@
+# Omarchy port: take only the media stack from Intel's graphics PPA, for an
+# Intel GPU on the xe driver (install/13-intel-media-root.sh). The PPA also
+# carries a kernel, the compute runtime and GPU management tools; those never
+# come from it. The media stanza comes first so it wins over the catch-all.
+Package: libva2 libva-drm2 libva-glx2 libva-wayland2 libva-x11-2 libva-dev vainfo intel-media-va-driver intel-media-va-driver-non-free libigfxcmrt7 libigdgmm12 libvpl2 libmfx-gen1.2
+Pin: release o=LP-PPA-kobuk-team-intel-graphics
+Pin-Priority: 500
+
+Package: *
+Pin: release o=LP-PPA-kobuk-team-intel-graphics
+Pin-Priority: -1
