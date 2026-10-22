@@ -69,9 +69,20 @@ present_upstream_files() {
     [[ -f $OMARCHY_PATH/$f ]] && printf '%s\n' "$f"
   done
 }
+# The port's own mise config as this step writes it, herdr and cliamp from
+# versions.env. Hashed with upstream's files: a pin that moves has to reach
+# /etc, and the updater reapplies this step on a manifest that changed.
+port_mise_config() {
+  cat "$REPO_DIR/etc/mise/conf.d/omarchy-ubuntu.toml"
+  printf 'herdr = "%s"\ncliamp = "%s"\n' "${HERDR_VERSION#v}" "${CLIAMP_VERSION#v}"
+}
+manifest() {
+  (cd "$OMARCHY_PATH" && present_upstream_files | xargs -r sha256sum)
+  port_mise_config | sha256sum | sed 's|  -$|  etc/mise/conf.d/omarchy-ubuntu.toml (port)|'
+}
 case ${1:-} in
   --manifest)
-    (cd "$OMARCHY_PATH" && present_upstream_files | xargs -r sha256sum)
+    manifest
     exit 0
     ;;
   --unhandled)
@@ -157,12 +168,9 @@ from_upstream 644 etc/mise/conf.d/omarchy.toml
 # Claude, Codex and Grok dispatch through omarchy-agent-account-exec, which the
 # same checkout's bin/ provides; mise builds the wrappers on its next reshim.
 from_upstream 644 etc/mise/conf.d/omarchy-agent-accounts.toml
-# The port's own tool versions, with herdr and cliamp from versions.env. System
-# level on purpose: the user's ~/.config/mise/config.toml overrides any of them.
-{
-  cat "$REPO_DIR/etc/mise/conf.d/omarchy-ubuntu.toml"
-  printf 'herdr = "%s"\ncliamp = "%s"\n' "${HERDR_VERSION#v}" "${CLIAMP_VERSION#v}"
-} | install_file 644 /etc/mise/conf.d/omarchy-ubuntu.toml
+# The port's own tool versions. System level on purpose: the user's
+# ~/.config/mise/config.toml overrides any of them.
+port_mise_config | install_file 644 /etc/mise/conf.d/omarchy-ubuntu.toml
 
 log "icons: Yaru back/forward arrows, as upstream's theme-system step"
 mkdir -p /usr/share/icons/Yaru/scalable/actions
@@ -191,5 +199,5 @@ note "logind, sysctl and modprobe changes apply fully after a reboot"
 # Remember what was applied so the updater can tell when upstream changes it.
 applied=$REPO_DIR/.applied
 install -d -o "$OMARCHY_USER" -g "$OMARCHY_USER" "$applied"
-(cd "$OMARCHY_PATH" && present_upstream_files | xargs -r sha256sum) >"$applied/57-system-tweaks.sha256"
+manifest >"$applied/57-system-tweaks.sha256"
 chown "$OMARCHY_USER:$OMARCHY_USER" "$applied/57-system-tweaks.sha256"
