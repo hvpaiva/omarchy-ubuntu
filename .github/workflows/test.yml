@@ -25,6 +25,12 @@ concurrency:
   group: test-${{ github.ref }}
   cancel-in-progress: true
 
+# Without a shell named, a run step is `bash -e` and a harness that fails
+# behind `| tee` passes; `shell: bash` is `bash -eo pipefail`.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   scenarios:
     runs-on: ubuntu-24.04

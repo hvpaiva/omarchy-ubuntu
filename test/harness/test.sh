@@ -6,6 +6,9 @@ set -u
 
 export HOME=/home/tester
 PORT=$HOME/.local/share/omarchy-ubuntu
+# The source is bind-mounted from the host's user, not the container's (a CI
+# runner is uid 1001, tester is 1000): git would refuse it as dubious.
+git config --global --add safe.directory /src/omarchy-ubuntu
 export OMARCHY_PATH=$HOME/.local/share/omarchy
 export OMARCHY_UBUNTU_DIR=$PORT
 export OMARCHY_UPDATE_UNATTENDED=1
