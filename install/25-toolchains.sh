@@ -21,7 +21,9 @@ if [[ ! -x $LOCAL_BIN/mise ]]; then
 fi
 if [[ $(mise --version 2>/dev/null | cut -d' ' -f1) != "$MISE_VERSION" ]]; then
   log "mise $MISE_VERSION (self-update)"
-  mise self-update -y "v$MISE_VERSION" >/dev/null
+  # The bare version: self-update adds the tag's "v" itself, where the
+  # installer above wants it given.
+  mise self-update -y "$MISE_VERSION" >/dev/null
 fi
 
 note "cargo $(cargo --version | cut -d' ' -f2), mise $(mise --version | cut -d' ' -f1)"
