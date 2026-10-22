@@ -33,6 +33,38 @@ elif [[ -e /usr/bin/omarchy-locale-generate || -e /etc/sudoers.d/omarchy-locale-
   rm -f /usr/bin/omarchy-locale-generate /etc/sudoers.d/omarchy-locale-generate
 fi
 
+# 4.5's passwordless sudo runs its root actions from the packaged copy at
+# /usr/bin, beside the security functions it sources, and refreshes the bar's
+# indicator through /usr/bin/omarchy-shell. The package's ALPM hook revokes
+# temporary grants before those files change; here the step that changes them
+# does, and stops if revocation fails. As the package's scriptlet, the marker
+# that revocation leaves clears once boot cleanup is in place.
+passwordless_files=(omarchy-sudo-passwordless omarchy-security-functions omarchy-shell)
+revoke_temporary_passwordless() {
+  [[ -x /usr/bin/omarchy-sudo-passwordless ]] || return 0
+  grep -q '__package-removing' /usr/bin/omarchy-sudo-passwordless || return 0
+  /usr/bin/omarchy-sudo-passwordless __package-removing ||
+    die "could not revoke temporary passwordless sudo grants; the installed command was left as it is"
+}
+if grep -qx 'readonly INSTALLED_SELF=/usr/bin/omarchy-sudo-passwordless' "$OMARCHY_PATH/bin/omarchy-sudo-passwordless" 2>/dev/null; then
+  changed=0
+  for f in "${passwordless_files[@]}"; do cmp -s "$OMARCHY_PATH/bin/$f" "/usr/bin/$f" || changed=1; done
+  if (( changed )); then
+    log "packaged copies of passwordless sudo, its security functions and omarchy-shell"
+    revoke_temporary_passwordless
+    install -m 0644 -o root -g root -T "$OMARCHY_PATH/bin/omarchy-security-functions" /usr/bin/omarchy-security-functions
+    install -m 0755 -o root -g root -T "$OMARCHY_PATH/bin/omarchy-shell" /usr/bin/omarchy-shell
+    install -m 0755 -o root -g root -T "$OMARCHY_PATH/bin/omarchy-sudo-passwordless" /usr/bin/omarchy-sudo-passwordless
+  fi
+  if [[ -e /run/omarchy-sudo-passwordless-package-removing && -f /etc/tmpfiles.d/omarchy-nopasswd-sudo.conf ]]; then
+    rm -f /run/omarchy-sudo-passwordless-package-removing
+  fi
+elif [[ -e /usr/bin/omarchy-sudo-passwordless || -e /usr/bin/omarchy-security-functions || -e /usr/bin/omarchy-shell ]]; then
+  log "passwordless sudo's packaged copies: not at this tag; temporary grants revoked, the copies removed"
+  revoke_temporary_passwordless
+  rm -f /usr/bin/omarchy-sudo-passwordless /usr/bin/omarchy-security-functions /usr/bin/omarchy-shell
+fi
+
 setup_dir() {
   local d=$1 p=""
   local IFS=/

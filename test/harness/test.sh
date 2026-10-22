@@ -216,6 +216,46 @@ check "S6 upstream 1788163635 ran on the marker" test -f "$HOME/.local/state/oma
 grep -q "Running migration (1788163635)" /tmp/s6.log && ok "S6 upstream 1788163635 ran, not marked" || ko "S6 upstream 1788163635 ran, not marked"
 # No Cam Link in a container: the port's migration has nothing to do and upstream's is marked.
 check "S6 Cam Link migration recorded, nothing installed without one" sh -c "test -f '$PORT/.applied/migrations/1792636073-camlink-4k.sh' && test -f '$HOME/.local/state/omarchy/migrations/1788862626.sh' && test ! -e /etc/modprobe.d/zz-omarchy-camlink-4k.conf"
+# 4.5's passwordless sudo: the packaged copies, and the helper's root actions
+# through them. A container has no systemd, so a temporary grant stops at its
+# expiry timer, past the lock and the boot cleanup check that refused it before.
+check "S6 passwordless sudo's packaged copies" sh -c 'for f in omarchy-sudo-passwordless omarchy-security-functions omarchy-shell; do cmp -s "$1/bin/$f" "/usr/bin/$f" && test "$(stat -c %U "/usr/bin/$f")" = root || exit 1; done' _ "$OMARCHY_PATH"
+uid=$(id -u)
+{ sudo /usr/bin/omarchy-sudo-passwordless __enable "$uid" permanent; } >/tmp/s6p.log 2>&1; st=$?
+expect "S6 permanent passwordless grant published" "0:yes" "$st:$(sudo test -f "/etc/sudoers.d/99-omarchy-permanent-nopasswd-$uid" && echo yes)"
+sudo /usr/bin/omarchy-sudo-passwordless __status "$uid" >/dev/null 2>&1; expect "S6 passwordless status active" 0 "$?"
+sudo /usr/bin/omarchy-sudo-passwordless __disable "$uid" >/dev/null 2>&1; st=$?
+expect "S6 passwordless grant revoked" "0:gone" "$st:$(sudo test -e "/etc/sudoers.d/99-omarchy-permanent-nopasswd-$uid" || echo gone)"
+# The expiry timer is the last step before publication: a stand-in that
+# records its arguments and fails shows the helper got past the lock, the
+# boot cleanup check and visudo, and that a failed timer publishes nothing.
+[[ -e /usr/bin/systemd-run ]] && sudo mv /usr/bin/systemd-run /usr/bin/systemd-run.real
+printf '#!/bin/bash\nprintf "%%s\\n" "$*" >>/tmp/systemd-run.args\nexit 1\n' | sudo tee /usr/bin/systemd-run >/dev/null
+sudo chmod 755 /usr/bin/systemd-run
+{ sudo /usr/bin/omarchy-sudo-passwordless __enable "$uid" 15; } >/tmp/s6t.log 2>&1
+grep -q -- "--on-calendar=@[0-9]* .* __expire $uid" /tmp/systemd-run.args 2>/dev/null && ok "S6 temporary grant reaches its expiry timer" || { ko "S6 temporary grant reaches its expiry timer"; onfail /tmp/s6t.log; }
+check "S6 the failed temporary grant left nothing" sudo sh -c "! ls /etc/sudoers.d/ | grep -q nopasswd"
+sudo rm -f /usr/bin/systemd-run
+[[ -e /usr/bin/systemd-run.real ]] && sudo mv /usr/bin/systemd-run.real /usr/bin/systemd-run
+# Upstream's own suites for the helper, against the series' copy: one
+# assertion reads "no packaged hook, no timed grant" as the boot rule's case.
+# noble's systemd-tmpfiles (255) has no --inline, which one of them uses.
+if ! /usr/bin/systemd-tmpfiles --help 2>/dev/null | grep -q -- --inline; then
+  sudo mv /usr/bin/systemd-tmpfiles /usr/bin/systemd-tmpfiles.real
+  printf '#!/bin/bash\nargs=() rules=() inline=0\nfor a in "$@"; do\n  if [[ $a == --inline ]]; then inline=1\n  elif (( inline )) && [[ $a != -* ]]; then rules+=("$a")\n  else args+=("$a"); fi\ndone\nif (( inline )); then f=$(mktemp --suffix=.conf); printf "%%s\\n" "${rules[@]}" >"$f"; args+=("$f"); fi\nexec /usr/bin/systemd-tmpfiles.real "${args[@]}"\n' | sudo tee /usr/bin/systemd-tmpfiles >/dev/null
+  sudo chmod 755 /usr/bin/systemd-tmpfiles
+fi
+pw_tree=$(mktemp -d)
+cp -a "$OMARCHY_PATH"/{bin,default,etc,migrations,test} "$pw_tree"/
+expiry=$pw_tree/test/shell.d/nopasswd-sudo-expiry-test.sh
+expect "S6 upstream's hook assertion found once" 1 "$(grep -c '^  rm "\$PACKAGE_HOOK"$' "$expiry")"
+sed -i '/^  rm "\$PACKAGE_HOOK"$/{s//  mv "$BOOT_CLEANUP_FILE" "$BOOT_CLEANUP_FILE.off"/;n;s/$/; mv "$BOOT_CLEANUP_FILE.off" "$BOOT_CLEANUP_FILE"/}' "$expiry"
+for suite in passwordless-grant-lifecycle-test.sh nopasswd-sudo-expiry-test.sh; do
+  (umask 022 && bash "$pw_tree/test/shell.d/$suite") >"/tmp/s6-$suite.log" 2>&1; st=$?
+  expect "S6 upstream's $suite passes on the series' helper" "0:0" "$st:$(grep -c '^not ok' "/tmp/s6-$suite.log")"
+  [[ $st == 0 ]] || onfail "/tmp/s6-$suite.log"
+done
+rm -rf "$pw_tree"
 expect "S6 the inhibitor runs under Arch's umask" 0022 "$(sort -u "$HOME/stay-awake.umask" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
 expect "S6 the inhibitor's leftover state no longer group-writable" "" "$(find "${inhibitor_state%/*}" -maxdepth 0 -perm /022 2>/dev/null; find "$inhibitor_state" -perm /022 2>/dev/null)"
 printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
@@ -233,6 +273,7 @@ expect "S6 back on stable" "${NEXT#v}" "$(omarchy-version)"
 # What 4.5 brought and $NEXT does not ship goes with the switch, as the older package would take it.
 check "S6 back on stable: 4.5's mise declarations gone" test ! -e /etc/mise/conf.d/omarchy-tools.toml
 check "S6 back on stable: locale helper and its rule gone" sudo sh -c 'test ! -e /usr/bin/omarchy-locale-generate && test ! -e /etc/sudoers.d/omarchy-locale-generate'
+check "S6 back on stable: passwordless sudo's packaged copies gone" sh -c 'test ! -e /usr/bin/omarchy-sudo-passwordless && test ! -e /usr/bin/omarchy-security-functions && test ! -e /usr/bin/omarchy-shell'
 check "S6 back on stable: 4.0.x files stay" test -f /etc/sysctl.d/99-omarchy-sysctl.conf
 expect "S6 back on stable: the admin's file at a 4.5 path is kept" "# the admin's" "$(cat /etc/mpv/mpv.conf)"
 

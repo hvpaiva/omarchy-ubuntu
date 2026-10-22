@@ -1,7 +1,8 @@
 #!/bin/bash
 # Upstream's 1788163635 takes away the passwordless-sudo grants the old helper
-# wrote through the 4.5 helper's __migrate, whose root lock refuses Ubuntu's
-# world-writable /run/lock. The root half beside this file does that part and
+# wrote through the 4.5 helper's __migrate. It was written while that helper's
+# root lock refused Ubuntu's world-writable /run/lock (the rc series now takes
+# it in /run), and stays: the root half beside this file does that part and
 # writes the marker the helper's __migration-complete checks, so upstream's
 # migration then passes here without asking for sudo, as on Arch.
 #
