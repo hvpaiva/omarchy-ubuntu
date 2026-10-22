@@ -1,9 +1,27 @@
 #!/bin/bash
 # System-side pieces (root): the dev link, login-shell env, sudo secure_path,
 # polkit, PAM stacks for the shell's lock screen and the polkit dialog, the
-# capability the screen recorder's KMS server needs.
+# screen recorder's KMS server with the capability it needs.
 source "${REPO_DIR:?}/lib/common.sh"
 need_root
+
+# gpu-screen-recorder runs the gsr-kms-server beside it, or else the first on
+# PATH, and asks for root at each recording of a monitor unless that one has
+# cap_sys_admin. Upstream's package installs it root's, in /usr/bin, with the
+# capability. The build leaves it in ~/.local/bin, the user's, where the next
+# build drops the capability: root's copy goes to /usr/local/bin instead, and
+# the updater moves each new build's (--gsr-kms-server).
+gsr_kms_server() {
+  [[ -f $LOCAL_BIN/gsr-kms-server ]] || return 0
+  log "gsr-kms-server: root's, in /usr/local/bin, with cap_sys_admin (screen recording without a root prompt)"
+  install -m 755 "$LOCAL_BIN/gsr-kms-server" /usr/local/bin/gsr-kms-server
+  setcap cap_sys_admin+ep /usr/local/bin/gsr-kms-server
+  rm -f "$LOCAL_BIN/gsr-kms-server"
+}
+if [[ ${1:-} == --gsr-kms-server ]]; then
+  gsr_kms_server
+  exit 0
+fi
 
 bootstrap="$OMARCHY_PATH/default/bash/env-bootstrap"
 [[ -r $bootstrap ]] || die "Omarchy checkout not found at $OMARCHY_PATH"
@@ -69,7 +87,4 @@ udevadm control --reload 2>/dev/null || true
 udevadm trigger -s leds -s backlight -c add 2>/dev/null || true
 note "group membership applies at the next login"
 
-if [[ -x $LOCAL_BIN/gsr-kms-server ]]; then
-  log "cap_sys_admin on gsr-kms-server (screen recording without a root prompt)"
-  setcap cap_sys_admin+ep "$LOCAL_BIN/gsr-kms-server"
-fi
+gsr_kms_server
