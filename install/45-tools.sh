@@ -77,11 +77,15 @@ fi
 cargo_app hyprland-preview-share-picker https://github.com/WhySoBad/hyprland-preview-share-picker "$SHARE_PICKER_VERSION"
 
 # Aether came from a Wails build here until step 15 took its release .deb; the
-# ~/.local copy would shadow /usr/bin/aether and double its launcher.
-rm -f "$LOCAL_BIN/aether" "$OMARCHY_HOME/.local/share/applications/li.oever.aether.desktop" \
-  "$OMARCHY_HOME/.local/share/applications/li.oever.aether.url-handler.desktop" \
-  "$OMARCHY_HOME/.local/share/icons/hicolor/512x512/apps/aether.png"
-rm -rf "$SRC_DIR/aether"
+# ~/.local copy would shadow /usr/bin/aether and double its launcher. The old
+# checkout marks that flow; without it, whatever sits at ~/.local/bin/aether is the user's.
+if [[ -d $SRC_DIR/aether ]]; then
+  log "aether: the earlier Wails build leaves ~/.local (step 15's .deb replaces it)"
+  rm -f "$LOCAL_BIN/aether" "$OMARCHY_HOME/.local/share/applications/li.oever.aether.desktop" \
+    "$OMARCHY_HOME/.local/share/applications/li.oever.aether.url-handler.desktop" \
+    "$OMARCHY_HOME/.local/share/icons/hicolor/512x512/apps/aether.png"
+  rm -rf "$SRC_DIR/aether"
+fi
 
 if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION"; then
   log "gpu-screen-recorder $GSR_VERSION (meson)"
