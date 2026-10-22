@@ -290,10 +290,22 @@ remove_one() {
 }
 
 action=build
-if [[ ${1:-} == --remove ]]; then
-  action=remove
-  shift
-fi
+case ${1:-} in
+  --remove)
+    action=remove
+    shift
+    ;;
+  --installed)
+    # Every app on the machine, however it got there (step 45, the menu, a
+    # migration): the updater brings each to its pin, build_one skipping the
+    # ones already there.
+    shift
+    for app in omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars; do
+      [[ -e $(marker_of "$app") ]] && set -- "$@" "$app"
+    done
+    (( $# > 0 )) || exit 0
+    ;;
+esac
 apps=("$@")
 (( ${#apps[@]} > 0 )) || die "which app? omacalc omawrite omacut hype monologue omasnap owe owe-lockfeed signed omarchy-hyprland-titlebars"
 for app in "${apps[@]}"; do
