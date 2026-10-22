@@ -358,7 +358,7 @@ declare -A ring_package=(
 declare -A mirror_package=(
   [QT]=qt6-base [GUM]=gum [FASTFETCH]=fastfetch [GHOSTTY]=ghostty [MISE]=mise [HYPRPICKER]=hyprpicker [XDG_TERMINAL_EXEC]=xdg-terminal-exec
   [GSR]=gpu-screen-recorder [GTK4_LAYER_SHELL]=gtk4-layer-shell [NERD_FONTS]=ttf-jetbrains-mono-nerd
-  [VULKAN_HEADERS]=vulkan-headers
+  [VULKAN_HEADERS]=vulkan-headers [WIREPLUMBER]=wireplumber
 )
 matched=0
 compare_pins() { # compare_pins <what> <url> <map name>
