@@ -189,11 +189,7 @@ from_upstream 644 etc/mpv/mpv.conf
 
 log "sudo: more password tries, passwordless timezone and DNS toggles"
 for f in omarchy-passwd-tries omarchy-tzupdate omarchy-dns; do
-  staged=$(mktemp)
-  sed 's/^%wheel /%sudo /' "$etc/sudoers.d/$f" >"$staged"
-  visudo -cf "$staged" >/dev/null
-  install_file 440 "/etc/sudoers.d/$f" <"$staged"
-  rm -f "$staged"
+  sed 's/^%wheel /%sudo /' "$etc/sudoers.d/$f" | install_sudoers "$f"
 done
 # omarchy-dns elevates by calling /usr/bin/omarchy-dns (the path its sudoers
 # rule names), so it needs the same root-owned copy as the browser policy helper.

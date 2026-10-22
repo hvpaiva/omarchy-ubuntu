@@ -63,6 +63,35 @@ install_file() {
   rm -f "$tmp"
 }
 
+# install_sudoers <name> < rules: into /etc/sudoers.d once the running sudo's
+# visudo reads them. sudo-rs (26.04's default) reads less than sudo does
+# (no argument patterns): what it cannot read is left out with a warning
+# rather than stopping the step, and a copy already in place that it cannot
+# read goes, as it would only print errors on every sudo call.
+install_sudoers() {
+  local dest=/etc/sudoers.d/$1 staged out
+  staged=$(mktemp)
+  cat >"$staged"
+  if out=$(visudo -cf "$staged" 2>&1); then
+    install_file 440 "$dest" <"$staged"
+  else
+    warn "$dest left out, $(sudo_name) cannot read it: $(grep -v '^$' <<<"$out" | tail -n1)"
+    if [[ -f $dest ]] && ! visudo -cf "$dest" >/dev/null 2>&1; then
+      rm -f "$dest"
+      note "removed   $dest"
+    fi
+  fi
+  rm -f "$staged"
+}
+
+# sudo_name: the sudo /usr/bin/sudo runs (26.04 has two behind one alternative).
+sudo_name() {
+  case $(readlink -f /usr/bin/sudo) in
+    */cargo/bin/sudo) echo sudo-rs ;;
+    *) echo sudo ;;
+  esac
+}
+
 # backup_once <file>: keep the pre-port copy next to the file, only the first time.
 backup_once() {
   if [[ -f $1 && ! -e $1.bak-omarchy ]]; then
