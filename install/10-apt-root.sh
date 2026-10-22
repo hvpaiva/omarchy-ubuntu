@@ -6,20 +6,46 @@ need_root
 log "Hyprland PPA (cppiber/hyprland: Hyprland >= 0.55 with Lua config, uwsm, hyprsunset, wayland-protocols >= 1.41)"
 ppa_source cppiber/hyprland
 
+# The two vendor sources are deb822 files: a release upgrade turns those off
+# (Enabled: no) and the check below turns them on again, where the one-line
+# .list the port wrote before could not be migrated and left .list.migrate and
+# .list.disabled copies behind. lists_superseded <name>: the old .list and those
+# copies go, once its .sources is in place.
+lists_superseded() {
+  rm -f "/etc/apt/sources.list.d/$1.list" "/etc/apt/sources.list.d/$1.list.migrate" "/etc/apt/sources.list.d/$1.list.disabled"
+}
+
 # Omarchy's base ships the 1Password app and CLI; on Ubuntu they come from 1Password's
-# own repository (its packages keep the source file current once installed)
+# own repository. The 1password package writes the same .sources and keeps it
+# current once installed (and comments out a .list it finds).
 log "1Password repository (app and CLI, as Omarchy's base)"
 if ! apt_source_active https://downloads.1password.com/linux/debian/amd64 stable; then
   curl -fsSL https://downloads.1password.com/linux/keys/1password.asc | gpg --dearmor --yes -o /usr/share/keyrings/1password-archive-keyring.gpg
-  echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/amd64 stable main' >/etc/apt/sources.list.d/1password.list
+  install_file 644 /etc/apt/sources.list.d/1password.sources <<'EOF'
+Types: deb
+URIs: https://downloads.1password.com/linux/debian/amd64
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By: /usr/share/keyrings/1password-archive-keyring.gpg
+EOF
 fi
+[[ ! -f /etc/apt/sources.list.d/1password.sources ]] || lists_superseded 1password
 
 # Omarchy's bar has a Tailscale widget and dots setup joins the tailnet: the package
 # comes from Tailscale's repository, which has one suite per Ubuntu release
 log "Tailscale repository"
-if ! apt_source_active https://pkgs.tailscale.com/stable/ubuntu "$UBUNTU_CODENAME"; then
+if ! apt_source_active https://pkgs.tailscale.com/stable/ubuntu "$UBUNTU_CODENAME" ||
+  grep -qs 'pkgs\.tailscale\.com' /etc/apt/sources.list.d/tailscale.list; then
   curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/$UBUNTU_CODENAME.noarmor.gpg" -o /usr/share/keyrings/tailscale-archive-keyring.gpg
-  curl -fsSL "https://pkgs.tailscale.com/stable/ubuntu/$UBUNTU_CODENAME.tailscale-keyring.list" -o /etc/apt/sources.list.d/tailscale.list
+  install_file 644 /etc/apt/sources.list.d/tailscale.sources <<EOF
+Types: deb
+URIs: https://pkgs.tailscale.com/stable/ubuntu
+Suites: $UBUNTU_CODENAME
+Components: main
+Signed-By: /usr/share/keyrings/tailscale-archive-keyring.gpg
+EOF
+  lists_superseded tailscale
 fi
 
 apt_retry update -qq
@@ -31,6 +57,8 @@ if [[ -z $nvim || $nvim == "(none)" ]] || dpkg --compare-versions "$nvim" lt 0.1
   log "Neovim PPA (neovim-ppa/stable): the archive's neovim is ${nvim:-none}"
   ppa_source neovim-ppa/stable
   apt_retry update -qq
+else
+  ppa_leftovers neovim-ppa/stable
 fi
 
 # --release (the updater, after a release upgrade): Ubuntu's upgrade kept what

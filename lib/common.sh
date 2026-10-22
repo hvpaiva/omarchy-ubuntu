@@ -210,13 +210,26 @@ apt_source_active() {
   apt-get indextargets --no-release-info --format '$(REPO_URI) $(RELEASE)' 2>/dev/null | grep -xF "${1%/}/ $2" >/dev/null
 }
 
-# ppa_source <owner/name>: the PPA, at this release. One the upgrade turned off
-# stays as it left it, beside the new one.
+# ppa_source <owner/name>: the PPA, at this release.
 ppa_source() {
-  apt_source_active "https://ppa.launchpadcontent.net/$1/ubuntu" "$UBUNTU_CODENAME" && return 0
-  # -n: add-apt-repository's own update shrugs off an index it could not
-  # fetch; the apt_retry update after it does not.
-  add-apt-repository -y -n "ppa:$1"
+  if ! apt_source_active "https://ppa.launchpadcontent.net/$1/ubuntu" "$UBUNTU_CODENAME"; then
+    # -n: add-apt-repository's own update shrugs off an index it could not
+    # fetch; the apt_retry update after it does not.
+    add-apt-repository -y -n "ppa:$1"
+  fi
+  ppa_leftovers "$1"
+}
+
+# ppa_leftovers <owner/name>: the PPA's files a release upgrade turned off at an
+# older release (add-apt-repository names them <owner>-ubuntu-<name>-<release>).
+ppa_leftovers() {
+  local f
+  for f in /etc/apt/sources.list.d/"${1%%/*}"-ubuntu-"${1#*/}"-*.sources; do
+    [[ -f $f && $f != *-"$UBUNTU_CODENAME".sources ]] || continue
+    grep -qx 'Enabled: no' "$f" || continue
+    rm -f "$f"
+    note "removed   $f (turned off by a release upgrade)"
+  done
 }
 
 # removed_preinstalls: what Remove > Preinstalls took away (the names upstream's

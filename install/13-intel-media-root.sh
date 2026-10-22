@@ -78,6 +78,7 @@ retire_ppa() {
     log "Intel's graphics PPA removed"
     add-apt-repository -y -r -n "ppa:$ppa"
   fi
+  ppa_leftovers "$ppa"
   apt_retry update -qq
   # Back to the newest version Ubuntu's archive has of each, which apt does
   # not downgrade to on its own.
