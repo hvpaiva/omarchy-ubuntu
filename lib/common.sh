@@ -99,7 +99,11 @@ git_checkout() {
   if [[ -d $dir/.git ]]; then
     # A repository moves now and then (tensaku's did): the clone follows the URL it is given.
     git -C "$dir" remote set-url origin "$url"
-    git -C "$dir" fetch --quiet --depth 1 origin "$ref" 2>/dev/null || git -C "$dir" fetch --quiet --tags origin
+    # A tag fetched by name lands in FETCH_HEAD only: the checkout would sit on
+    # it detached, describe would not name the pin, and the build steps that
+    # compare the two would rebuild on every update.
+    git -C "$dir" fetch --quiet --depth 1 origin "+refs/tags/$ref:refs/tags/$ref" 2>/dev/null ||
+      git -C "$dir" fetch --quiet --depth 1 origin "$ref" 2>/dev/null || git -C "$dir" fetch --quiet --tags origin
     git -C "$dir" -c advice.detachedHead=false checkout --quiet "$ref" 2>/dev/null || git -C "$dir" -c advice.detachedHead=false checkout --quiet FETCH_HEAD
   elif [[ $ref =~ ^[0-9a-f]{40}$ ]]; then
     # GitHub serves a commit by hash to fetch, which clone --branch cannot ask for.
