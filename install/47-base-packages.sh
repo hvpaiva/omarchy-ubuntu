@@ -21,9 +21,8 @@ else
 fi
 (( ${#names[@]} > 0 )) || die "no default package set in $OMARCHY_PATH"
 
-if [[ -f $OMARCHY_HOME/.local/state/omarchy/preinstalls-removed ]]; then
-  removed=$(python3 "$REPO_DIR/lib/catalog.py" --calls "$OMARCHY_PATH" |
-    awk -F'\t' '$2 == "drop" && $3 ~ /^bin\/omarchy-remove-preinstalls:/ { print $1 }' | sort -u)
+removed=$(removed_preinstalls)
+if [[ -n $removed ]]; then
   mapfile -t names < <(printf '%s\n' "${names[@]}" | grep -vxF -f <(printf '%s\n' "$removed"))
   note "the preinstalls stay removed: $(tr '\n' ' ' <<<"$removed")"
 fi

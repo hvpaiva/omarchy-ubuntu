@@ -1,4 +1,4 @@
-From b00ef7b042bfe38cb7efe611c71a44de2d352af1 Mon Sep 17 00:00:00 2001
+From 49c9c5ccc4b17ef6313512a21ee254c6a6252e0e Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Thu, 24 Sep 2026 09:49:03 -0300
 Subject: [PATCH 08/12] Ubuntu port: mise wrappers exec the tool by absolute

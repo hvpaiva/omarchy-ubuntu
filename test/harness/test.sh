@@ -425,6 +425,17 @@ expect "S14 refused" 1 "$st"
 grep -q "switch with: omarchy-channel-set rc" /tmp/s14.log && ok "S14 points at omarchy-channel-set" || { ko "S14 points at omarchy-channel-set"; tail -3 /tmp/s14.log; }
 expect "S14 channel untouched" stable "$(cat "$HOME/.local/state/omarchy/channel")"
 
+echo "== S19 removed preinstalls stay out of the steps"
+common() { (cd "$PORT" && REPO_DIR=$PORT bash -c "source lib/common.sh; $1") 2>/dev/null | tr '\n' ' ' | sed 's/ $//'; }
+expect "S19 nothing removed without the marker" "" "$(common removed_preinstalls)"
+apps_before=$(common base_apps)
+mkdir -p "$HOME/.local/state/omarchy" && touch "$HOME/.local/state/omarchy/preinstalls-removed"
+removed=$(common removed_preinstalls)
+[[ " $removed " == *" cliamp "* && " $removed " == *" omacalc "* ]] && ok "S19 the marker names what upstream's removal drops" || ko "S19 the marker names what upstream's removal drops ($removed)"
+apps_after=$(common base_apps)
+[[ " $apps_before " == *" omacalc "* && " $apps_after " != *" omacalc "* ]] && ok "S19 a removed companion app is not rebuilt" || ko "S19 a removed companion app is not rebuilt ($apps_before -> $apps_after)"
+rm -f "$HOME/.local/state/omarchy/preinstalls-removed"
+
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
 # bootstrap refuses a channel other than the recorded one: set aside, as a
