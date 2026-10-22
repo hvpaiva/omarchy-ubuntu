@@ -525,6 +525,16 @@ expect "R1 a source at another release does not count" no "$(active)"
 test_source "" "$codename"
 expect "R1 an enabled source at this release counts" yes "$(active)"
 sudo rm -f /etc/apt/sources.list.d/omarchy-test.sources
+# What a release upgrade leaves of a PPA: its file at the old release, off.
+ppa_file() { printf '%bTypes: deb\nURIs: https://ppa.launchpadcontent.net/omarchy/test/ubuntu/\nSuites: %s\nComponents: main\n' "$1" "$2" | sudo tee "/etc/apt/sources.list.d/omarchy-ubuntu-test-$2.sources" >/dev/null; }
+ppa_file 'Enabled: no\n' oldrelease
+ppa_file 'Enabled: no\n' "$codename"
+ppa_file "" olderrelease
+(cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester bash -c 'source lib/common.sh; ppa_leftovers omarchy/test') >/tmp/r1.log 2>&1 || { ko "R1 ppa_leftovers"; onfail /tmp/r1.log; }
+check "R1 a PPA's file the upgrade turned off at another release goes" test ! -e /etc/apt/sources.list.d/omarchy-ubuntu-test-oldrelease.sources
+check "R1 one at this release stays, even off" test -e "/etc/apt/sources.list.d/omarchy-ubuntu-test-$codename.sources"
+check "R1 one still on stays" test -e /etc/apt/sources.list.d/omarchy-ubuntu-test-olderrelease.sources
+sudo rm -f /etc/apt/sources.list.d/omarchy-ubuntu-test-*.sources
 
 echo "== R3 a release upgrade: the steps that hold what is per release run once"
 # Stubs in the steps' place record each call: the steps themselves need the
