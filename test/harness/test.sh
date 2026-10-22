@@ -46,6 +46,36 @@ git -C "$PORT" push -q -u origin main || { echo "the port's remote refused the p
 head=$(git -C "$PORT" rev-parse --short HEAD)
 echo "port at $head, branch $(git -C "$PORT" branch --show-current)"
 
+# On a release whose sudo is sudo-rs (26.04's image), the machine under test
+# is one step 55 already moved to classic sudo, as a bootstrap leaves it.
+if update-alternatives --query sudo >/dev/null 2>&1; then
+  echo "== R2 sudo: classic sudo over sudo-rs, unless an admin chose by hand"
+  step55() { (cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester ./install/55-root.sh --sudo) >/tmp/r2.log 2>&1; }
+  sudoers_as_root() { # sudoers_as_root <name> <rule>: install_sudoers as a root step calls it
+    (cd "$PORT" && printf '%s\n' "$2" | sudo env REPO_DIR="$PORT" OMARCHY_USER=tester bash -c "source lib/common.sh; install_sudoers $1") >/tmp/r2.log 2>&1
+  }
+  pattern_rule='%sudo ALL=(root) NOPASSWD: /usr/bin/timedatectl ^set-timezone [A-Za-z0-9_+/-]+$'
+  sudo update-alternatives --set sudo /usr/lib/cargo/bin/sudo >/dev/null
+  step55 || { ko "R2 step 55 --sudo, alternative set by hand"; onfail /tmp/r2.log; }
+  expect "R2 sudo-rs set by hand stays" /usr/lib/cargo/bin/sudo "$(readlink -f /usr/bin/sudo)"
+  check "R2 says it leaves it" grep -q 'set by hand' /tmp/r2.log
+  printf '%s\n' "$pattern_rule" | sudo tee /etc/sudoers.d/omarchy-r2-pattern >/dev/null
+  sudo chmod 440 /etc/sudoers.d/omarchy-r2-pattern
+  expect "R2 a rule sudo-rs cannot read is left out, without failing" 0 "$(sudoers_as_root omarchy-r2-pattern "$pattern_rule"; echo $?)"
+  check "R2 and the unreadable copy already there goes" sudo test ! -e /etc/sudoers.d/omarchy-r2-pattern
+  sudoers_as_root omarchy-r2-plain 'Defaults passwd_tries=10' || ko "R2 install_sudoers, a rule sudo-rs reads"
+  check "R2 a rule sudo-rs reads goes in, 440" sudo sh -c 'test "$(stat -c %a /etc/sudoers.d/omarchy-r2-plain)" = 440'
+  sudo update-alternatives --auto sudo >/dev/null
+  step55 || { ko "R2 step 55 --sudo"; onfail /tmp/r2.log; }
+  expect "R2 classic sudo selected" /usr/bin/sudo.ws "$(readlink -f /usr/bin/sudo)"
+  check "R2 visudo moves with it" sh -c '[ "$(readlink -f /usr/sbin/visudo)" = /usr/sbin/visudo.ws ]'
+  expect "R2 the pattern rule goes in under classic sudo" 0 "$(sudoers_as_root omarchy-r2-pattern "$pattern_rule"; echo $?)"
+  check "R2 and is in place" sudo test -f /etc/sudoers.d/omarchy-r2-pattern
+  expect "R2 step 55 --sudo again changes nothing" 0 "$(step55; echo $?)"
+  check "R2 quietly" sh -c '! grep -q "classic sudo (sudo.ws) over" /tmp/r2.log'
+  sudo rm -f /etc/sudoers.d/omarchy-r2-pattern /etc/sudoers.d/omarchy-r2-plain
+fi
+
 # The pins the branch ships, and a second tag to move between.
 BASE=$(sed -n 's/^OMARCHY_TAG_STABLE=\${OMARCHY_TAG_STABLE:-\(v[^}]*\)}.*/\1/p' "$PORT/versions.env")
 RC_BASE=$(sed -n 's/^OMARCHY_TAG_RC=\${OMARCHY_TAG_RC:-\(v[^}]*\)}.*/\1/p' "$PORT/versions.env")

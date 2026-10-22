@@ -1,7 +1,8 @@
 #!/bin/bash
-# System-side pieces (root): the dev link, login-shell env, sudo secure_path,
-# polkit, PAM stacks for the shell's lock screen and the polkit dialog, the
-# screen recorder's KMS server with the capability it needs.
+# System-side pieces (root): classic sudo where sudo-rs is the default (--sudo
+# does only that), the dev link, login-shell env, sudo secure_path, polkit,
+# PAM stacks for the shell's lock screen and the polkit dialog, the screen
+# recorder's KMS server with the capability it needs.
 source "${REPO_DIR:?}/lib/common.sh"
 need_root
 
@@ -23,6 +24,34 @@ if [[ ${1:-} == --gsr-kms-server ]]; then
   exit 0
 fi
 
+# Upstream's sudoers rules are sudo's (sudo.ws): argument patterns, a
+# timestamp on a rule (NOTAFTER), `sudo -N`. 26.04 makes sudo-rs its sudo,
+# which has none of them, and keeps classic sudo installed as /usr/bin/sudo.ws
+# behind the same alternative; the port selects it, as Ubuntu documents for
+# going back (`update-alternatives --auto sudo` returns to sudo-rs). An
+# alternative an admin set by hand stays as it is: the rules sudo-rs cannot
+# read are then left out (install_sudoers).
+classic_sudo() {
+  local query
+  query=$(update-alternatives --query sudo 2>/dev/null) || return 0
+  grep -qx 'Value: /usr/bin/sudo.ws' <<<"$query" && return 0
+  if grep -qx 'Status: manual' <<<"$query"; then
+    warn "sudo is $(sed -n 's/^Value: //p' <<<"$query"), set by hand: left as it is; Omarchy's sudoers rules it cannot read stay out"
+    return 0
+  fi
+  if ! grep -qx 'Alternative: /usr/bin/sudo.ws' <<<"$query"; then
+    warn "no classic sudo (/usr/bin/sudo.ws) to select: Omarchy's sudoers rules $(sudo_name) cannot read stay out"
+    return 0
+  fi
+  log "sudo: classic sudo (sudo.ws) over sudo-rs, for upstream's sudoers rules"
+  update-alternatives --set sudo /usr/bin/sudo.ws >/dev/null
+  note "back to sudo-rs: update-alternatives --auto sudo"
+}
+classic_sudo
+if [[ ${1:-} == --sudo ]]; then
+  exit 0
+fi
+
 bootstrap="$OMARCHY_PATH/default/bash/env-bootstrap"
 [[ -r $bootstrap ]] || die "Omarchy checkout not found at $OMARCHY_PATH"
 
@@ -41,11 +70,8 @@ install_file 644 /etc/profile.d/omarchy.sh <<EOF
 EOF
 
 log "sudo secure_path with the checkout's bin (what omarchy-dev-link writes on Arch)"
-staged=$(mktemp)
-printf 'Defaults secure_path="%s/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"\n' "$OMARCHY_PATH" >"$staged"
-visudo -cf "$staged" >/dev/null
-install_file 440 /etc/sudoers.d/omarchy-dev-path <"$staged"
-rm -f "$staged"
+printf 'Defaults secure_path="%s/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"\n' "$OMARCHY_PATH" |
+  install_sudoers omarchy-dev-path
 
 log "polkit: authenticate as the requesting user"
 # Ubuntu offers the whole sudo group as admin identities and the shell's agent
