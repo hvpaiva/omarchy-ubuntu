@@ -577,6 +577,28 @@ expect "S22 a release that packages 0.5: neither" "" "$(dropins)"
 sudo rm -f /usr/bin/wireplumber /usr/local/bin/wireplumber
 rm -f "$HOME/fake-wireplumber"
 
+echo "== S23 uwsm's session env: upstream's env.d file, and a block only for an older uwsm"
+uwsm_env=$HOME/.config/uwsm/env
+fake_uwsm() { # fake_uwsm <version>: dpkg reports uwsm at that version
+  rm -rf "$HOME/fake-uwsm" && mkdir -p "$HOME/fake-uwsm/DEBIAN"
+  printf 'Package: uwsm\nVersion: %s\nArchitecture: all\nMaintainer: harness <harness@localhost>\nDescription: stand-in\n' "$1" >"$HOME/fake-uwsm/DEBIAN/control"
+  dpkg-deb --root-owner-group --build "$HOME/fake-uwsm" "$HOME/fake-uwsm.deb" >/dev/null && sudo dpkg -i "$HOME/fake-uwsm.deb" >/dev/null
+}
+mkdir -p "$(dirname "$uwsm_env")"
+printf 'export MINE=1\n\n# >>> omarchy-ubuntu env-bootstrap >>>\nexport TERMINAL=xdg-terminal-exec\n# <<< omarchy-ubuntu env-bootstrap <<<\n' >"$uwsm_env"
+fake_uwsm 0.26.4-1ppa1
+omarchy-update-ubuntu -y >/tmp/s23.log 2>&1 || onfail /tmp/s23.log
+expect "S23 the env.d file is upstream's, through the dev link" /usr/share/omarchy/default/uwsm/env.d/10-omarchy "$(readlink /usr/share/uwsm/env.d/10-omarchy)"
+check "S23 uwsm 0.26.4 reads it: the block that stood in is gone" sh -c "! grep -q 'omarchy-ubuntu env-bootstrap' '$uwsm_env'"
+check "S23 the user's own lines stay" grep -qx 'export MINE=1' "$uwsm_env"
+fake_uwsm 0.25.2-1
+(cd "$PORT" && REPO_DIR=$PORT ./install/50-user.sh --uwsm-env) >/tmp/s23b.log 2>&1 || onfail /tmp/s23b.log
+check "S23 uwsm 0.25.2 gets the same file through a block" grep -qxF '[ -r /usr/share/uwsm/env.d/10-omarchy ] && . /usr/share/uwsm/env.d/10-omarchy' "$uwsm_env"
+check "S23 the file stays POSIX" sh -n "$uwsm_env"
+sudo dpkg -r uwsm >/dev/null
+sudo rm -f /usr/share/uwsm/env.d/10-omarchy
+rm -rf "$HOME/fake-uwsm" "$HOME/fake-uwsm.deb"
+
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
 # bootstrap refuses a channel other than the recorded one: set aside, as a
