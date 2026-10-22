@@ -155,7 +155,9 @@ instructions if it finds a rebase that an earlier updater left in progress.
 Ubuntu's own upgrade (`do-release-upgrade`, or Software Updater) is the way:
 it asks before it goes on with the packages that come from outside Ubuntu's
 archive (Hyprland from its PPA, Chromium, the `.deb` tools), turns every PPA
-and third-party source off, and makes sudo-rs the sudo. Run
+and third-party source off, and makes sudo-rs the sudo. It may also ask about
+`/etc/cups/cups-files.conf`, which the port edits: either answer works, as the
+update after it puts the port's line back. Run
 `omarchy-update-ubuntu` once the machine is on 26.04. It sees the new release
 (`.applied/ubuntu-release`) and runs once what a bootstrap on it would: the
 sources at the new release and the apt packages from them, the `.deb` tools
