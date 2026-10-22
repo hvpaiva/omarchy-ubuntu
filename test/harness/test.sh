@@ -1,0 +1,287 @@
+#!/usr/bin/env bash
+# Runs inside the harness container as `tester`. Exercises the bootstrap's
+# checkout step per channel, the channel commands, and the updater's branch
+# rebuild, migration table, local-commit guard, channel switch and self-update.
+set -u
+
+export HOME=/home/tester
+PORT=$HOME/.local/share/omarchy-ubuntu
+# The source is bind-mounted from the host's user, not the container's (a CI
+# runner is uid 1001, tester is 1000): git would refuse it as dubious. For a
+# clone's source git matches the git directory itself, not the work tree.
+git config --global --add safe.directory /src/omarchy-ubuntu/.git
+export OMARCHY_PATH=$HOME/.local/share/omarchy
+export OMARCHY_UBUNTU_DIR=$PORT
+export OMARCHY_UPDATE_UNATTENDED=1
+# The tool steps (Qt, Quickshell, the apps) are the full harness's business.
+export OMARCHY_UPDATE_TOOLS=0
+export GIT_AUTHOR_NAME=tester GIT_AUTHOR_EMAIL=tester@localhost GIT_COMMITTER_NAME=tester GIT_COMMITTER_EMAIL=tester@localhost
+
+pass=0; fail=0
+ok() { echo "PASS  $1"; pass=$((pass + 1)); }
+ko() { echo "FAIL  $1"; fail=$((fail + 1)); }
+check() { # check <name> <command...>: pass when the command exits 0
+  local name=$1; shift
+  if "$@" >/dev/null 2>&1; then ok "$name"; else ko "$name"; fi
+}
+expect() { # expect <name> <wanted> <got>
+  if [[ $2 == "$3" ]]; then ok "$1"; else ko "$1 (wanted '$2', got '$3')"; fi
+}
+
+# Shims for what a container has no session for.
+mkdir -p "$HOME/shims"
+for s in systemctl hyprctl Hyprland journalctl omarchy-restart-shell omarchy-update-stay-awake omarchy-show-done; do
+  printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/$s"; chmod +x "$HOME/shims/$s"
+done
+export PATH="$HOME/shims:$OMARCHY_PATH/bin:$HOME/.local/bin:$PATH"
+
+# The port, as a clone with a remote the self-update test can push to. Whatever
+# the source had checked out (a branch, a pull request's detached merge
+# commit), the port under test sits on main, as an install does.
+git init -q --bare -b main /tmp/port.git
+git clone -q /src/omarchy-ubuntu "$PORT"
+git -C "$PORT" checkout -q -B main
+git -C "$PORT" remote set-url origin /tmp/port.git
+git -C "$PORT" push -q -u origin main || { echo "the port's remote refused the push (a shallow source?)"; exit 2; }
+head=$(git -C "$PORT" rev-parse --short HEAD)
+echo "port at $head, branch $(git -C "$PORT" branch --show-current)"
+
+# The pins the branch ships, and a second tag to move between.
+BASE=$(sed -n 's/^OMARCHY_TAG_STABLE=\${OMARCHY_TAG_STABLE:-\(v[^}]*\)}.*/\1/p' "$PORT/versions.env")
+RC_BASE=$(sed -n 's/^OMARCHY_TAG_RC=\${OMARCHY_TAG_RC:-\(v[^}]*\)}.*/\1/p' "$PORT/versions.env")
+RC_VERSION=${RC_BASE#v}; RC_VERSION=${RC_VERSION/-rc/rc}   # spelled as upstream's package
+if [[ $BASE == v4.0.6 ]]; then NEXT=v4.0.5; else NEXT=v4.0.6; fi
+echo "stable pin $BASE, rc pin $RC_BASE, moving to $NEXT"
+RC_PATCHES=$(ls "$PORT"/patches/rc/*.patch | wc -l)
+pin() { # pin <tag>: commit a stable pin on the port and publish it, as a maintainer would
+  sed -i "s/OMARCHY_TAG_STABLE:-v[0-9.]*/OMARCHY_TAG_STABLE:-$1/" "$PORT/versions.env"
+  git -C "$PORT" commit -qam "pin $1" && git -C "$PORT" push -q origin HEAD:main
+}
+mark_done() { # mark_done <tag>: every migration the tag ships, as a fresh install's state
+  mkdir -p "$HOME/.local/state/omarchy/migrations"
+  git -C "$OMARCHY_PATH" ls-tree --name-only "$1" -- migrations/ | while read -r m; do touch "$HOME/.local/state/omarchy/migrations/$(basename "$m")"; done
+}
+onfail() { # onfail <log>: the tail of an updater log when a check just failed
+  echo "----- $1"; tail -25 "$1" | sed 's/^/      /'; echo "-----"
+}
+
+echo "== S1 stable bootstrap, step 30"
+(cd "$PORT" && REPO_DIR=$PORT ./bootstrap.sh 30) >/tmp/s1.log 2>&1 || { ko "S1 bootstrap 30 exit (see log)"; tail -20 /tmp/s1.log; }
+expect "S1 channel file" stable "$(cat "$HOME/.local/state/omarchy/channel" 2>/dev/null)"
+expect "S1 branch" ubuntu "$(git -C "$OMARCHY_PATH" branch --show-current)"
+expect "S1 base tag" "$BASE" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
+expect "S1 patches on top" 13 "$(git -C "$OMARCHY_PATH" rev-list --count "$BASE..ubuntu")"
+expect "S1 bootstrap 30 is idempotent" 0 "$( (cd "$PORT" && REPO_DIR=$PORT ./bootstrap.sh 30) >/dev/null 2>&1; echo $?)"
+(cd "$PORT" && REPO_DIR=$PORT ./bootstrap.sh 80) >/dev/null 2>&1
+
+echo "== S2 channel commands"
+expect "S2 current" stable "$(omarchy-channel-ubuntu current)"
+expect "S2 version" "${BASE#v}" "$(omarchy-channel-ubuntu version)"
+expect "S2 target" "$BASE" "$(omarchy-channel-ubuntu target)"
+expect "S2 upstream omarchy-version hands over" "${BASE#v}" "$(omarchy-version)"
+expect "S2 upstream omarchy-channel-current hands over" stable "$(omarchy-channel-current)"
+out=$(omarchy-update-available); st=$?
+expect "S2 update-available: nothing" "1:Omarchy is up to date" "$st:$out"
+expect "S2 unknown channel refused" 1 "$(OMARCHY_CHANNEL=bogus omarchy-channel-ubuntu current >/dev/null 2>&1; echo $?)"
+
+echo "== S3 the stable pin moves to $NEXT"
+# Every migration either tag ships is marked done: the container has none of
+# what they install, and the updater's migration logic gets its own scenario.
+mark_done "$BASE"; mark_done "$NEXT"; mark_done "$RC_BASE"
+pin "$NEXT"
+out=$(omarchy-update-available); st=$?
+expect "S3 update-available sees the pin" "0:omarchy ${BASE#v} -> ${NEXT#v}" "$st:$out"
+# A grant the pre-4.5 helper wrote and a stranger under its prefix, for the port's migration.
+echo "tester ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/99-omarchy-nopasswd-tester >/dev/null
+echo "tester ALL=(ALL) NOPASSWD: /usr/bin/true" | sudo tee /etc/sudoers.d/99-omarchy-nopasswd-odd >/dev/null
+sudo chmod 440 /etc/sudoers.d/99-omarchy-nopasswd-tester /etc/sudoers.d/99-omarchy-nopasswd-odd
+omarchy-update-ubuntu -y >/tmp/s3.log 2>&1; st=$?
+expect "S3 updater exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s3.log
+pieces=$(grep -n 'Pieces outside the checkout' /tmp/s3.log | head -1 | cut -d: -f1)
+migrations=$(grep -n $'\e\\[32mMigrations' /tmp/s3.log | head -1 | cut -d: -f1)
+[[ -n $pieces && -n $migrations ]] && (( pieces < migrations )) && ok "S3 root pieces reapplied before the migrations" || ko "S3 root pieces reapplied before the migrations (lines $pieces, $migrations)"
+# Before 4.5 the port's migrations have nothing to stand in for: all pending.
+check "S3 the old helper's grant stays on 4.0.x" sudo test -f /etc/sudoers.d/99-omarchy-nopasswd-tester
+expect "S3 no port migration recorded before 4.5" 0 "$(ls "$PORT/.applied/migrations" 2>/dev/null | wc -l)"
+expect "S3 pending port migrations say so" "$(find "$PORT/migrations" -name '*.sh' ! -name '*-root.sh' | wc -l)" "$(grep -c "left pending, not applicable yet" /tmp/s3.log)"
+expect "S3 base tag" "$NEXT" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
+expect "S3 patches on top" 13 "$(git -C "$OMARCHY_PATH" rev-list --count "$NEXT..ubuntu")"
+expect "S3 version" "${NEXT#v}" "$(omarchy-version)"
+expect "S3 clean tree" "" "$(git -C "$OMARCHY_PATH" status --porcelain)"
+check "S3 browser policy helper reapplied" test -x /usr/bin/omarchy-theme-set-browser-policy
+check "S3 sudoers rule reapplied" sudo test -f /etc/sudoers.d/omarchy-theme-browser
+check "S3 system tweak installed" test -f /etc/sysctl.d/99-omarchy-sysctl.conf
+check "S3 port commands linked" test -L "$HOME/.local/bin/omarchy-channel-ubuntu"
+grep -q "Migrations" /tmp/s3.log && grep -q "None pending" /tmp/s3.log && ok "S3 no migration pending" || ko "S3 migrations step"
+
+echo "== S4 migration table (1790397381 exits 0 on its own; 1791403252 reorders pacman.conf)"
+rm -f "$HOME/.local/state/omarchy/migrations/1790397381.sh" "$HOME/.local/state/omarchy/migrations/1791403252.sh"
+sed -i '/^OMARCHY_MIGRATIONS_ARCH_ONLY=(/,/^)/{/1791403252.sh/d}' "$PORT/lib/migrations.sh"
+git -C "$PORT" commit -qam "table: without 1791403252" >/dev/null 2>&1 || true
+omarchy-update-ubuntu -y >/tmp/s4a.log 2>&1 || onfail /tmp/s4a.log
+check "S4 plain migration ran" test -f "$HOME/.local/state/omarchy/migrations/1790397381.sh"
+check "S4 unlisted Arch migration left pending" test ! -f "$HOME/.local/state/omarchy/migrations/1791403252.sh"
+grep -q "does not list it yet" /tmp/s4a.log && ok "S4 unlisted Arch migration flagged" || ko "S4 unlisted Arch migration flagged"
+sed -i 's/^OMARCHY_MIGRATIONS_ARCH_ONLY=(/OMARCHY_MIGRATIONS_ARCH_ONLY=(\n  1791403252.sh/' "$PORT/lib/migrations.sh"
+git -C "$PORT" commit -qam "table: 1791403252 is Arch-only"
+omarchy-update-ubuntu -y >/tmp/s4b.log 2>&1 || onfail /tmp/s4b.log
+check "S4 listed Arch migration marked done" test -f "$HOME/.local/state/omarchy/migrations/1791403252.sh"
+grep -q "Arch-only, marked done" /tmp/s4b.log && ok "S4 marked-done message" || ko "S4 marked-done message"
+
+echo "== S5 a commit of the user's own on the branch"
+git -C "$OMARCHY_PATH" commit -q --allow-empty -m "my own change"
+pin "$BASE"
+omarchy-update-ubuntu -y >/tmp/s5.log 2>&1; st=$?
+expect "S5 updater refuses" 1 "$st"
+[[ $st == 1 ]] || onfail /tmp/s5.log
+grep -q "neither upstream's nor the port's series" /tmp/s5.log && ok "S5 names the foreign commit" || { ko "S5 names the foreign commit"; onfail /tmp/s5.log; }
+expect "S5 branch untouched" "$NEXT" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
+git -C "$OMARCHY_PATH" reset -q --hard HEAD~1
+omarchy-update-ubuntu -y >/tmp/s5b.log 2>&1; st=$?
+expect "S5 updater goes through once removed" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s5b.log
+expect "S5 version" "${BASE#v}" "$(omarchy-version)"
+
+echo "== S6 channel switch"
+pin "$NEXT"
+# For the port's mise wrappers migration, which 4.5's declarations unlock: a
+# mise that does nothing, a wrapper in the port's form and one the user edited.
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/mise"; chmod +x "$HOME/shims/mise"
+mkdir -p "$HOME/.local/bin"
+printf '#!/bin/bash\nexport MISE_MINIMUM_RELEASE_AGE=0\nmise use -g --quiet "aqua:openai/codex" || exit 1\nbin_path=$(mise which --tool "aqua:openai/codex" "codex" 2>/dev/null) || bin_path="codex"\nexec mise x "aqua:openai/codex" -- "$bin_path" "$@"\n' >"$HOME/.local/bin/codex"
+printf '#!/bin/bash\n# mine\nexport MISE_MINIMUM_RELEASE_AGE=0\nmise use -g --quiet "aqua:anthropics/claude-code" || exit 1\nbin_path=$(mise which --tool "aqua:anthropics/claude-code" "claude" 2>/dev/null) || bin_path="claude"\nexec mise x "aqua:anthropics/claude-code" -- "$bin_path" "$@"\n' >"$HOME/.local/bin/claude"
+chmod +x "$HOME/.local/bin/codex" "$HOME/.local/bin/claude"
+# Upstream's 1788163635 pending: it passes on the marker the port's migration writes first.
+# Upstream's 1791382872 pending too: the port's wrapper retirement waits for it.
+rm -f "$HOME/.local/state/omarchy/migrations/1788163635.sh" "$HOME/.local/state/omarchy/migrations/1791382872.sh"
+# An autostart.lua from before 4.5 that the user extended, for the port's owed migration.
+mkdir -p "$HOME/.config/hypr"
+sed 's/ owed\.service"/ my-thing.service"/' "$PORT/config/hypr/autostart.lua" >"$HOME/.config/hypr/autostart.lua"
+# A file of the admin's at a path 4.5 ships and 4.0.x does not: kept beside while on rc, back on the switch back.
+sudo mkdir -p /etc/mpv
+echo "# the admin's" | sudo tee /etc/mpv/mpv.conf >/dev/null
+omarchy-channel-ubuntu set rc >/tmp/s6.log 2>&1; st=$?
+expect "S6 set rc exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s6.log
+expect "S6 current" rc "$(omarchy-channel-current)"
+expect "S6 rc pin applied" "$RC_BASE" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
+expect "S6 rc patches on top" "$RC_PATCHES" "$(git -C "$OMARCHY_PATH" rev-list --count "$RC_BASE..ubuntu")"
+expect "S6 version" "$RC_VERSION" "$(omarchy-version)"
+check "S6 mise declarations installed by step 57" test -f /etc/mise/conf.d/omarchy-tools.toml
+check "S6 locale helper copied" test -x /usr/bin/omarchy-locale-generate
+check "S6 locale sudoers rule" sudo test -f /etc/sudoers.d/omarchy-locale-generate
+check "S6 port-form wrapper retired" test ! -e "$HOME/.local/bin/codex"
+check "S6 edited wrapper kept" test -f "$HOME/.local/bin/claude"
+check "S6 mise wrappers migration recorded" test -f "$PORT/.applied/migrations/1792592500-mise-wrappers.sh"
+up=$(grep -n "Running migration (1791382872)" /tmp/s6.log | head -1 | cut -d: -f1)
+port=$(grep -n "Ran port migration (1792592500-mise-wrappers)" /tmp/s6.log | head -1 | cut -d: -f1)
+[[ -n $up && -n $port ]] && (( up < port )) && ok "S6 port wrapper retirement after upstream's" || ko "S6 port wrapper retirement after upstream's (lines $up, $port)"
+check "S6 port migration removed the old helper's grant" sudo test ! -e /etc/sudoers.d/99-omarchy-nopasswd-tester
+check "S6 port migration quarantined the stranger as upstream does" sudo sh -c 'grep -qx 99-omarchy-nopasswd-odd /var/lib/omarchy/sudoers-quarantine/*/name && test -f /var/lib/omarchy/sudoers-quarantine/*/policy'
+check "S6 port migration wrote the 4.5 helper's marker" test -f /var/lib/omarchy/migrations/1788163635
+check "S6 sudo migration recorded" test -f "$PORT/.applied/migrations/1792592191-passwordless-sudo-legacy.sh"
+grep -q 'voxtype.service owed.service my-thing.service' "$HOME/.config/hypr/autostart.lua" && ok "S6 autostart.lua gained owed.service, the user's entry kept" || ko "S6 autostart.lua gained owed.service, the user's entry kept"
+check "S6 fcitx5 glyphs fetched before the theme migration" test -s /usr/share/fcitx5/themes/default/prev.svg
+check "S6 the admin's mpv.conf kept beside upstream's" sudo sh -c 'cmp -s /etc/mpv/mpv.conf "$1" && grep -qx "# the admin.s" /etc/mpv/mpv.conf.bak-omarchy' _ "$OMARCHY_PATH/etc/mpv/mpv.conf"
+check "S6 upstream 1788163635 ran on the marker" test -f "$HOME/.local/state/omarchy/migrations/1788163635.sh"
+grep -q "Running migration (1788163635)" /tmp/s6.log && ok "S6 upstream 1788163635 ran, not marked" || ko "S6 upstream 1788163635 ran, not marked"
+rm -f "$HOME/shims/mise"
+# 4.5's omarchy-update and omarchy-channel-set open with a sudo preamble that
+# narrows PATH; the port's hand-off must come before it.
+omarchy-update -y >/tmp/s6u.log 2>&1; st=$?
+expect "S6 upstream omarchy-update hands over on rc" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s6u.log
+grep -q "already at $RC_BASE" /tmp/s6u.log && ok "S6 handed-over update sees the rc target" || ko "S6 handed-over update sees the rc target"
+omarchy-channel-set stable >/tmp/s6b.log 2>&1; st=$?
+expect "S6 upstream omarchy-channel-set hands over" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s6b.log
+expect "S6 back on stable" "${NEXT#v}" "$(omarchy-version)"
+# What 4.5 brought and $NEXT does not ship goes with the switch, as the older package would take it.
+check "S6 back on stable: 4.5's mise declarations gone" test ! -e /etc/mise/conf.d/omarchy-tools.toml
+check "S6 back on stable: locale helper and its rule gone" sudo sh -c 'test ! -e /usr/bin/omarchy-locale-generate && test ! -e /etc/sudoers.d/omarchy-locale-generate'
+check "S6 back on stable: 4.0.x files stay" test -f /etc/sysctl.d/99-omarchy-sysctl.conf
+expect "S6 back on stable: the admin's file at a 4.5 path is kept" "# the admin's" "$(cat /etc/mpv/mpv.conf)"
+
+echo "== S7 the port updates itself"
+git clone -q /tmp/port.git /tmp/port-dev
+sed -i "s/OMARCHY_TAG_STABLE:-v[0-9.]*/OMARCHY_TAG_STABLE:-$BASE/" /tmp/port-dev/versions.env
+git -C /tmp/port-dev commit -qam "pin $BASE upstream of the machine"
+git -C /tmp/port-dev push -q origin HEAD:main
+out=$(omarchy-update-available); st=$?
+expect "S7 update-available sees the port behind" 0 "$st"
+grep -q "omarchy-ubuntu 1 new commit" <<<"$out" && ok "S7 reports the port commit" || ko "S7 reports the port commit ($out)"
+grep -q "omarchy ${NEXT#v} -> ${BASE#v}" <<<"$out" && ok "S7 reports the pin the remote carries" || ko "S7 reports the pin the remote carries ($out)"
+omarchy-update-ubuntu -y >/tmp/s7.log 2>&1; st=$?
+expect "S7 updater exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s7.log
+grep -q "restarting on the new copy" /tmp/s7.log && ok "S7 re-executed on the pulled copy" || ko "S7 re-executed on the pulled copy"
+expect "S7 pin from the pulled port applied" "$BASE" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
+
+echo "== S8 dev channel"
+omarchy-channel-ubuntu set dev >/tmp/s8.log 2>&1; st=$?
+expect "S8 set dev exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s8.log
+grep -q "left as it is" /tmp/s8.log && ok "S8 branch left alone" || ko "S8 branch left alone"
+expect "S8 version" "dev ($(git -C "$OMARCHY_PATH" rev-parse --short HEAD))" "$(omarchy-version)"
+omarchy-channel-ubuntu set stable >/dev/null 2>&1
+
+echo "== S11 an unknown ref"
+omarchy-update-ubuntu v9.9.9 >/tmp/s11.log 2>&1; st=$?
+expect "S11 refused" 2 "$st"
+expect "S11 branch intact" ubuntu "$(git -C "$OMARCHY_PATH" branch --show-current)"
+
+echo "== S12 a rebuild cut short"
+mkdir -p "$OMARCHY_PATH/.git/rebase-apply"
+omarchy-update-ubuntu -y >/tmp/s12.log 2>&1; st=$?
+expect "S12 refused" 1 "$st"
+grep -q "was interrupted" /tmp/s12.log && ok "S12 says why" || ko "S12 says why"
+rmdir "$OMARCHY_PATH/.git/rebase-apply"
+
+echo "== S13 a patch dropped from the series"
+git -C "$PORT" rm -q patches/stable/0012-*.patch && git -C "$PORT" commit -qm "series: drop 0012" && git -C "$PORT" push -q origin HEAD:main
+omarchy-update-ubuntu -y >/tmp/s13.log 2>&1; st=$?
+expect "S13 updater rebuilds" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s13.log
+expect "S13 patches on top" 12 "$(git -C "$OMARCHY_PATH" rev-list --count "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)..ubuntu")"
+git -C "$PORT" revert --no-edit HEAD >/dev/null && git -C "$PORT" push -q origin HEAD:main
+expect "S13 series back to 13 files" 13 "$(ls "$PORT"/patches/stable/*.patch | wc -l)"
+omarchy-update-ubuntu -y >/tmp/s13b.log 2>&1 || onfail /tmp/s13b.log
+expect "S13 series restored" 13 "$(git -C "$OMARCHY_PATH" rev-list --count "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)..ubuntu")"
+
+echo "== S9 upstream-check inside the container"
+out=$(cd /tmp && omarchy-upstream-check --channel stable --target "$NEXT" 2>&1); st=$?
+# Exit 1 is a report with something to read (a pin behind upstream, say); 2 is the check failing.
+(( st <= 1 )) && ok "S9 stable check ran (exit $st)" || { ko "S9 stable check ran (exit $st)"; sed -n 1,40p <<<"$out" | sed 's/^/      /'; }
+grep -q "13 patches rebase cleanly" <<<"$out" && ok "S9 stable: series rebases" || { ko "S9 stable: series rebases"; sed -n 1,14p <<<"$out" | sed 's/^/      /'; }
+if grep -q '^## Versions' <<<"$out"; then
+  grep -q "pins match" <<<"$out" && ok "S9 versions compared against the ring and the mirror" || { ko "S9 versions compared"; grep -A12 '^## Versions' <<<"$out" | sed 's/^/      /'; }
+fi
+grep -q "stable channel" <<<"$out" && ok "S9 header names the channel" || ko "S9 header names the channel"
+out=$(cd /tmp && omarchy-upstream-check --channel rc --target "$RC_BASE" 2>&1); st=$?
+(( st <= 1 )) && ok "S9 rc check ran (exit $st)" || { ko "S9 rc check ran (exit $st)"; sed -n 1,40p <<<"$out" | sed 's/^/      /'; }
+grep -q "$RC_PATCHES patches rebase cleanly" <<<"$out" && ok "S9 rc: series rebases" || { ko "S9 rc: series rebases"; sed -n 1,14p <<<"$out" | sed 's/^/      /'; }
+grep -q "rc channel" <<<"$out" && ok "S9 rc header names the channel" || ko "S9 rc header names the channel"
+
+echo "== S14 a re-run of the bootstrap asking for another channel"
+(cd "$PORT" && OMARCHY_CHANNEL=rc REPO_DIR=$PORT ./bootstrap.sh 30) >/tmp/s14.log 2>&1; st=$?
+expect "S14 refused" 1 "$st"
+grep -q "switch with: omarchy-channel-set rc" /tmp/s14.log && ok "S14 points at omarchy-channel-set" || { ko "S14 points at omarchy-channel-set"; tail -3 /tmp/s14.log; }
+expect "S14 channel untouched" stable "$(cat "$HOME/.local/state/omarchy/channel")"
+
+echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
+export HOME=/tmp/edgehome; mkdir -p "$HOME"; export OMARCHY_PATH=$HOME/.local/share/omarchy
+(cd "$PORT" && OMARCHY_CHANNEL=edge REPO_DIR=$PORT ./bootstrap.sh 30) >/tmp/s10.log 2>&1; st=$?
+if [[ $st == 0 ]]; then
+  ok "S10 edge bootstrap applied the rc series on $(git -C "$OMARCHY_PATH" describe --tags)"
+  expect "S10 edge patches on top" "$RC_PATCHES" "$(git -C "$OMARCHY_PATH" rev-list --count "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)..ubuntu")"
+else
+  echo "      edge bootstrap exit $st: $(grep -m1 -E 'does not rebase|does not apply' /tmp/s10.log)"
+  expect "S10 failed step leaves no branch behind" "" "$(git -C "$OMARCHY_PATH" branch --list ubuntu)"
+  check "S10 failed step leaves no rebase in progress" test ! -d "$OMARCHY_PATH/.git/rebase-merge" -a ! -d "$OMARCHY_PATH/.git/rebase-apply"
+fi
+export HOME=/home/tester; export OMARCHY_PATH=$HOME/.local/share/omarchy
+
+echo
+echo "passed $pass, failed $fail"
+(( fail == 0 ))

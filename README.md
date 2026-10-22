@@ -84,7 +84,20 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `etc/` | PAM stacks (lock, polkit with fingerprint), polkit rule, wayland session entry |
 | `bin/` | `omarchy-update-ubuntu`, `omarchy-channel-ubuntu`, `omarchy-upstream-check`, `omarchy-port-series`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
 | `.github/workflows/upstream.yml` | weekly report of what the next Omarchy brings for each channel of the port, posted as issues |
+| `.github/workflows/test.yml` | the harness's scenarios on every pull request and push to main; the full bootstrap, per channel, when dispatched with its switch |
+| `test/harness/` | the container harness: `run.sh` (the updater and channel scenarios of `test.sh`) and `full.sh` (the bootstrap, steps 10 to 45, of `full-test.sh`), both on a clean Ubuntu 24.04 image |
 | `docs/` | deviations from upstream and the gotchas found while porting |
+
+## Testing
+
+Both halves of the harness need Docker and run the port at a ref of a repository, this checkout included:
+
+```sh
+test/harness/run.sh "$PWD"                                   # scenarios: channels, the updater's branch rebuild, migrations, switches, self-update
+test/harness/full.sh "$PWD" HEAD 10 12 15 20 25 30 40 45     # a fresh bootstrap as far as a container goes; OMARCHY_CHANNEL=rc for the rc channel
+```
+
+The bootstrap keeps apt's package cache and index lists in Docker volumes between runs (`CACHE=<name>` for a second pair, `APT_CACHE_DIR=<dir>` for bind-mounted directories), and every step's full output under `test/harness/logs/`. Steps 50 to 80 need a session and a real kernel: they only run on a machine.
 
 ## Updating
 
