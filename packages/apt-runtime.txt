@@ -85,6 +85,11 @@ yaru-theme-icon
 dconf-cli
 libglib2.0-bin
 
+# The xcb platform plugin of the port's Qt, which Omarchy's QT_QPA_PLATFORM
+# ("wayland;xcb") falls back to: Qt 6.5+ loads it only with libxcb-cursor,
+# which Arch's qt6-base pulls in.
+libxcb-cursor0
+
 # Input method for XCompose sequences (upstream ships fcitx5)
 fcitx5
 fcitx5-frontend-gtk3
