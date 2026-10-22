@@ -12,10 +12,14 @@
 #   omarchy-upstream-check --branch         # base -> upstream's default branch, what edge follows
 #   omarchy-upstream-check --base v4.0.3 --target v4.0.4
 #   omarchy-upstream-check --repo <dir|url> # where to read upstream from
+#   omarchy-upstream-check --problems <file> # also list each kind of problem found there
 #
-# Output is Markdown (the CI job posts it as an issue). Exit status is 0 when
+# Output is Markdown (the upstream workflow posts it). Exit status is 0 when
 # the patches rebase cleanly and every new package has a source on Ubuntu,
-# 1 otherwise, so a job can tell "read this" from "nothing to do".
+# 1 otherwise, so a job can tell "read this" from "nothing to do". The
+# problems file gets one line per problem, its kind first: patches, packages,
+# names, migrations, versions, or unread (a database the check could not
+# fetch).
 
 # shellcheck disable=SC2016  # backticks inside sed programs are Markdown, not expansions
 set -uo pipefail
@@ -28,6 +32,7 @@ base=""
 target=""
 branch=0
 channel=""
+problems_file=""
 while (( $# )); do
   case $1 in
     --repo) repo=$2; shift 2 ;;
@@ -35,7 +40,8 @@ while (( $# )); do
     --target) target=$2; shift 2 ;;
     --branch) branch=1; shift ;;
     --channel) channel=$2; shift 2 ;;
-    -h | --help) sed -n '3,18p' "$0"; exit 0 ;;
+    --problems) problems_file=$2; : >"$problems_file" || exit 2; shift 2 ;;
+    -h | --help) sed -n '3,22p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -97,7 +103,10 @@ g rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "unknown base
 g rev-parse --verify --quiet "$target^{commit}" >/dev/null || { echo "unknown target: $target" >&2; exit 2; }
 
 status=0
-problem() { status=1; }
+problem() { # problem <kind> [what]
+  status=1
+  [[ -z $problems_file ]] || printf '%s\t%s\n' "$1" "${2:-}" >>"$problems_file"
+}
 
 # A package name is known to the port when it is on one of the apt lists, when
 # omarchy-pkg-ubuntu (the fork's backend) has a recipe or alias for it, or when
@@ -162,7 +171,7 @@ if ! g -c user.name=port -c user.email=port@localhost -c commit.gpgsign=false am
   echo
   sed 's/^/    /' "$work/am.err"
   g am --abort 2>/dev/null
-  problem
+  problem patches "the series does not apply on $series_base"
 else
   resolver=$clone/bin/omarchy-pkg-ubuntu
   # --onto: only the patches move. Release tags are cut on their own branch, so
@@ -171,11 +180,12 @@ else
   if g -c user.name=port -c user.email=port@localhost -c commit.gpgsign=false rebase --quiet --onto "$target" "$series_base" check >"$work/rebase.out" 2>&1; then
     echo "The $(g rev-list --count "$target..check") patches rebase cleanly onto $target."
   else
-    echo "Rebase conflict in \"$(g log -1 --format=%s REBASE_HEAD 2>/dev/null)\":"
+    conflict=$(g log -1 --format=%s REBASE_HEAD 2>/dev/null)
+    echo "Rebase conflict in \"$conflict\":"
     echo
     g diff --name-only --diff-filter=U | sed 's/^/- `/; s/$/`/'
     g rebase --abort 2>/dev/null
-    problem
+    problem patches "\"$conflict\" conflicts on $target"
   fi
 fi
 echo
@@ -192,7 +202,7 @@ else
       echo "- added \`$name\`: $reason"
     else
       echo "- added \`$name\`: **$reason**"
-      problem
+      problem packages "$name"
     fi
   done <"$work/added"
   while IFS= read -r name; do
@@ -235,7 +245,7 @@ else
         echo "- \`$name\`, $where: $reason"
       elif awk -F'\t' -v n="$name" '$1 == n && $2 !~ /^(present|missing|drop|remove)$/ { found = 1 } END { exit !found }' "$target_calls"; then
         echo "- \`$name\`, $where: **$reason**"
-        problem
+        problem names "$name"
       else
         # Only checked for or removed: on Ubuntu it is never there, which is
         # right unless Ubuntu has it under another name.
@@ -258,19 +268,20 @@ else
     kind="runs as is"
     grep -qE "$arch_only" "$work/migration" && kind="**Arch tooling, the updater asks**"
     echo "- \`${file#migrations/}\`: $kind"
-    grep -oE 'omarchy-pkg-add[^|&;>]*' "$work/migration" | sed 's/omarchy-pkg-add//' | tr ' ' '\n' | grep -v '^$' | sort -u |
-      while IFS= read -r name; do
-        if [[ $name == *'$'* ]]; then
-          echo "  - installs $name: a name computed at run time, read the migration"
-          continue
-        fi
-        if reason=$(classify_pkg "$name"); then
-          echo "  - installs \`$name\`: $reason"
-        else
-          echo "  - installs \`$name\`: **$reason**"
-          problem
-        fi
-      done
+    # Fed from a process substitution, not a pipe, so a problem found here
+    # reaches the exit status.
+    while IFS= read -r name; do
+      if [[ $name == *'$'* ]]; then
+        echo "  - installs $name: a name computed at run time, read the migration"
+        continue
+      fi
+      if reason=$(classify_pkg "$name"); then
+        echo "  - installs \`$name\`: $reason"
+      else
+        echo "  - installs \`$name\`: **$reason**"
+        problem migrations "$name"
+      fi
+    done < <(grep -oE 'omarchy-pkg-add[^|&;>]*' "$work/migration" | sed 's/omarchy-pkg-add//' | tr ' ' '\n' | grep -v '^$' | sort -u)
   done <"$work/migrations"
 fi
 echo
@@ -354,12 +365,12 @@ compare_pins() { # compare_pins <what> <url> <map name>
   local -n map=$3
   if [[ -z $url ]]; then
     echo "- $what: no pacman configuration for the $ring ring at $target"
-    problem
+    problem unread "$what"
     return
   fi
   if ! db_versions "$url" "$work/$what.db" >"$work/$what.tsv" || [[ ! -s $work/$what.tsv ]]; then
     echo "- $what: could not read $url (network, or no zstd for tar)"
-    problem
+    problem unread "$what"
     return
   fi
   for var in $(printf '%s\n' "${!map[@]}" | sort); do
@@ -372,7 +383,7 @@ compare_pins() { # compare_pins <what> <url> <map name>
     # A commit pinned here is spelled by pacman as <version>.r<n>.g<short hash>.
     elif [[ $pin != "$theirs" && $theirs != *.g"${pin:0:7}" ]]; then
       echo "- \`$name\`: **port $pin, $what $theirs**"
-      problem
+      problem versions "$name $pin -> $theirs ($what)"
     else
       matched=$((matched + 1))
     fi

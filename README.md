@@ -87,7 +87,7 @@ this port itself writes into `$HOME`, so that layer knows what not to track.
 | `config/hypr/` | `hyprland.lua` and `autostart.lua` with the Ubuntu/GDM glue; the other Hyprland files are seeded from upstream's stubs |
 | `etc/` | PAM stacks (lock, polkit with fingerprint), polkit rule, wayland session entry |
 | `bin/` | `omarchy-update-ubuntu`, `omarchy-channel-ubuntu`, `omarchy-upstream-check`, `omarchy-port-series`, `omarchy-build-app` (companion apps from source), `omarchy-keyring-passwordless` |
-| `.github/workflows/upstream.yml` | weekly report of what the next Omarchy brings for each channel of the port, posted as issues |
+| `.github/workflows/upstream.yml` | `omarchy-upstream-check` per channel, daily and on every push that touches the pins, the series or the catalog: an issue per channel only while the port has something to do there (a newer ref to move to, a pin behind upstream, a patch that no longer applies, a package without an Ubuntu source), with how to settle it, closed by the first run that finds nothing left; every report in the run's summary |
 | `.github/workflows/test.yml` | the harness's scenarios on every pull request and push to main; the full bootstrap, per channel, when dispatched with its switch |
 | `test/harness/` | the container harness: `run.sh` (the updater and channel scenarios of `test.sh`) and `full.sh` (the bootstrap, steps 10 to 45, of `full-test.sh`, then a check that every package name the checkout can ask for resolves), both on a clean Ubuntu 24.04 image |
 | `docs/` | deviations from upstream and the gotchas found while porting |
