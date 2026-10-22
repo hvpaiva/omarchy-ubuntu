@@ -586,17 +586,24 @@ fake_uwsm() { # fake_uwsm <version>: dpkg reports uwsm at that version
 }
 mkdir -p "$(dirname "$uwsm_env")"
 printf 'export MINE=1\n\n# >>> omarchy-ubuntu env-bootstrap >>>\nexport TERMINAL=xdg-terminal-exec\n# <<< omarchy-ubuntu env-bootstrap <<<\n' >"$uwsm_env"
+uwsm_env_mode() { (cd "$PORT" && REPO_DIR=$PORT ./install/50-user.sh --uwsm-env) >/tmp/s23b.log 2>&1 || onfail /tmp/s23b.log; }
 fake_uwsm 0.26.4-1ppa1
 omarchy-update-ubuntu -y >/tmp/s23.log 2>&1 || onfail /tmp/s23.log
 expect "S23 the env.d file is upstream's, through the dev link" /usr/share/omarchy/default/uwsm/env.d/10-omarchy "$(readlink /usr/share/uwsm/env.d/10-omarchy)"
-check "S23 uwsm 0.26.4 reads it: the block that stood in is gone" sh -c "! grep -q 'omarchy-ubuntu env-bootstrap' '$uwsm_env'"
+# No step 55 has run here: without the dev link, the file is out of reach.
+check "S23 while the link leads nowhere, the block stays" grep -qF 'omarchy-ubuntu env-bootstrap' "$uwsm_env"
+dev_link=0
+[[ -e /usr/share/omarchy ]] || { sudo ln -sfn "$OMARCHY_PATH" /usr/share/omarchy && dev_link=1; }
+uwsm_env_mode
+check "S23 uwsm 0.26.4 reads the file: the block that stood in is gone" sh -c "! grep -q 'omarchy-ubuntu env-bootstrap' '$uwsm_env'"
 check "S23 the user's own lines stay" grep -qx 'export MINE=1' "$uwsm_env"
 fake_uwsm 0.25.2-1
-(cd "$PORT" && REPO_DIR=$PORT ./install/50-user.sh --uwsm-env) >/tmp/s23b.log 2>&1 || onfail /tmp/s23b.log
+uwsm_env_mode
 check "S23 uwsm 0.25.2 gets the same file through a block" grep -qxF '[ -r /usr/share/uwsm/env.d/10-omarchy ] && . /usr/share/uwsm/env.d/10-omarchy' "$uwsm_env"
 check "S23 the file stays POSIX" sh -n "$uwsm_env"
 sudo dpkg -r uwsm >/dev/null
 sudo rm -f /usr/share/uwsm/env.d/10-omarchy
+(( dev_link == 0 )) || sudo rm -f /usr/share/omarchy
 rm -rf "$HOME/fake-uwsm" "$HOME/fake-uwsm.deb"
 
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
