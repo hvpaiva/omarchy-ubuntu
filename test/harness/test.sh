@@ -563,19 +563,28 @@ wp_dir=$HOME/.config/systemd/user/wireplumber.service.d
 fake_wp() { printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber %s"\n' "$2" >"$HOME/fake-wireplumber" && sudo install -m 755 "$HOME/fake-wireplumber" "$1"; }
 units() { (cd "$PORT" && REPO_DIR=$PORT ./install/46-audio-denoise.sh --units) >/tmp/s22b.log 2>&1 || onfail /tmp/s22b.log; }
 dropins() { (cd "$wp_dir" 2>/dev/null && ls) | tr '\n' ' ' | sed 's/ $//'; }
+: >"$HOME/s22.systemctl"
+printf '#!/bin/bash\necho "$*" >>"$HOME/s22.systemctl"\n' >"$HOME/shims/systemctl"
+restarts() { grep -c '^--user try-restart wireplumber.service$' "$HOME/s22.systemctl"; }
 fake_wp /usr/bin/wireplumber 0.4.17
 rm -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service" "$wp_dir"/*.conf
 omarchy-update-ubuntu -y >/tmp/s22.log 2>&1 || onfail /tmp/s22.log
 check "S22 the updater puts the denoise unit in place" test -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service"
 expect "S22 noble's 0.4 alone: the filter-chain drop-in" 10-omarchy-filter-chains.conf "$(dropins)"
+expect "S22 0.4 keeps running: no restart" 0 "$(restarts)"
 fake_wp /usr/local/bin/wireplumber 0.5.18
 units
 expect "S22 0.5 built beside it: the drop-in that runs it" 20-omarchy-wireplumber-0.5.conf "$(dropins)"
+expect "S22 the session moves onto the build" 1 "$(restarts)"
+units
+expect "S22 nothing changed: no restart" 1 "$(restarts)"
 fake_wp /usr/bin/wireplumber 0.5.12
 units
 expect "S22 a release that packages 0.5: neither" "" "$(dropins)"
+expect "S22 the session moves off the build, onto the release's" 2 "$(restarts)"
 sudo rm -f /usr/bin/wireplumber /usr/local/bin/wireplumber
-rm -f "$HOME/fake-wireplumber"
+rm -f "$HOME/fake-wireplumber" "$HOME/s22.systemctl"
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/systemctl"
 
 echo "== S23 uwsm's session env: upstream's env.d file, and a block only for an older uwsm"
 uwsm_env=$HOME/.config/uwsm/env
