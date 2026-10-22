@@ -115,6 +115,23 @@ else
   echo "Port at $(git -C "$PORT_DIR" describe --always --dirty 2>/dev/null)."
 fi
 
+# An updater from before the channels rebased the branch onto the newest tag
+# and could stop in a conflict, telling the user to resolve it. Here the
+# branch is rebuilt from the series, so nothing of that rebase is needed; a
+# fork's rebase is its owner's to finish.
+checkout_git_dir=$(git -C "$OMARCHY_PATH" rev-parse --absolute-git-dir)
+if [[ -d $checkout_git_dir/rebase-merge || -d $checkout_git_dir/rebase-apply ]]; then
+  echo -e "\e[31mA rebase is in progress in $OMARCHY_PATH.\e[0m" >&2
+  if [[ -n $OMARCHY_FORK ]]; then
+    echo "Finish it (git -C $OMARCHY_PATH rebase --continue) or abort it, then run omarchy-update-ubuntu again." >&2
+  else
+    echo "An earlier updater left it; the port rebuilds the $BRANCH branch from its series, so abort it and update again:" >&2
+    echo "  git -C $OMARCHY_PATH rebase --abort" >&2
+    echo "  omarchy-update-ubuntu" >&2
+  fi
+  exit 1
+fi
+
 step "Fetching upstream"
 git -C "$OMARCHY_PATH" fetch --quiet --tags origin
 git -C "$OMARCHY_PATH" remote set-head origin --auto >/dev/null 2>&1 || true
