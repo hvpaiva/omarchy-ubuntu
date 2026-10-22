@@ -352,6 +352,15 @@ check "S16 the root step ran on that authorization" test -x /usr/bin/omarchy-the
 echo harness | sudo -S sh -c "echo 'tester ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/tester" 2>/dev/null
 printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
 
+echo "== S17 a pinned app's clone moves to its next tag"
+# The build steps compare describe with the pin; a tag that only reached
+# FETCH_HEAD rebuilt the app on every update.
+git init -q -b main /tmp/app-src
+git -C /tmp/app-src commit -q --allow-empty -m one && git -C /tmp/app-src tag v1
+git -C /tmp/app-src commit -q --allow-empty -m two && git -C /tmp/app-src tag -a v2 -m v2
+(REPO_DIR=$PORT && source "$PORT/lib/common.sh" && git_checkout /tmp/app file:///tmp/app-src v1 && git_checkout /tmp/app file:///tmp/app-src v2) >/tmp/s17.log 2>&1
+expect "S17 the clone names the new tag" v2 "$(git -C /tmp/app describe --tags 2>/dev/null)"
+
 echo "== S8 dev channel"
 omarchy-channel-ubuntu set dev >/tmp/s8.log 2>&1; st=$?
 expect "S8 set dev exit" 0 "$st"
