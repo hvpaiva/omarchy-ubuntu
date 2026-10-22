@@ -4,6 +4,10 @@ Omarchy 4 on Ubuntu 24.04: the same shell, menus, themes, lock screen, companion
 apps and keybindings as [Omarchy](https://omarchy.org), on a machine whose
 operating system you are not allowed to replace.
 
+> **Installed before 2026-10-21?** Pull this repository before your next
+> update: the updater you have predates the channels and stops in a rebase
+> conflict. [Updating](#updating) has the three commands.
+
 ## Who this is for
 
 If you can choose your operating system, install Omarchy. It is a complete,
@@ -113,6 +117,23 @@ and every user unit upstream ships (minus `lib/units.sh`'s skip list). Then the
 port's own migrations (`migrations/`), upstream's new ones (`lib/migrations.sh`
 names the Arch-only ones it marks done instead), the post-update hooks, and the
 shell restarts. `-y` asks nothing, as upstream's `omarchy-update -y`.
+
+**From a port older than 2026-10-21** (before the channels: that updater took
+the newest tag of the checkout and rebased the branch onto it, and never
+updated the port itself), the next `omarchy-update-ubuntu` picks `v4.5.0-rc1`
+and stops in a rebase conflict. Abort it, bring this repository to main, then
+update; the branch is rebuilt from the series on the stable tag, nothing of
+the old one is needed
+([#18](https://github.com/hvpaiva/omarchy-ubuntu/issues/18)):
+
+```sh
+git -C ~/.local/share/omarchy rebase --abort        # only if a rebase is in progress
+git -C ~/.local/share/omarchy-ubuntu pull --ff-only
+omarchy-update-ubuntu
+```
+
+From then on the updater updates itself first, and stops with the same
+instructions if it finds a rebase that an earlier updater left in progress.
 
 ### Channels
 
