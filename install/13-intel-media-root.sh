@@ -7,7 +7,7 @@
 # Intel's route for them on 24.04 is its graphics PPA, which also carries a
 # kernel and the compute runtime: the pin takes the media stack from it and
 # nothing else. A GPU on i915 keeps noble's stack, which drives it. 26.04's
-# own stack drives xe (libva 2.24, iHD 26.3): there the step only retires the
+# own stack drives xe (libva 2.23, iHD 26.1): there the step only retires the
 # PPA an install on noble took, back to the archive's.
 #
 #   13-intel-media-root.sh          the PPA's media stack, on an Intel GPU on xe
@@ -15,9 +15,9 @@
 #   13-intel-media-root.sh --due    (as the user) whether the updater runs the step
 #
 # OMARCHY_INTEL_MEDIA=1 takes the PPA's stack whatever the driver and the
-# release; =0 never. A machine bootstrapped before the step takes it at its
-# next update. --undo and =0 leave a marker in .applied, so the updates after
-# them keep the archive's.
+# release (after a release upgrade, from the PPA at the new one); =0 never. A
+# machine bootstrapped before the step takes it at its next update. --undo and
+# =0 leave a marker in .applied, so the updates after them keep the archive's.
 source "${REPO_DIR:?}/lib/common.sh"
 
 ppa=kobuk-team/intel-graphics
@@ -48,13 +48,17 @@ archive_drives_xe() {
   [[ -n $libva && -n $ihd ]] && dpkg --compare-versions "$libva" ge 2.21 && dpkg --compare-versions "$ihd" ge 25.1
 }
 
+ppa_on() { apt_source_active "https://ppa.launchpadcontent.net/$ppa/ubuntu" "$UBUNTU_CODENAME"; }
+
 if [[ ${1:-} == --due ]]; then
   [[ ! -f $declined && ${OMARCHY_INTEL_MEDIA:-} != 0 ]] || exit 1
   if [[ ${OMARCHY_INTEL_MEDIA:-} != 1 ]] && archive_drives_xe; then
     [[ -f $pin ]] && exit 0
     exit 1
   fi
-  [[ ! -f $pin ]] || exit 1
+  # A release upgrade keeps the pin and turns the PPA off at the old release:
+  # the stack is in place only with the PPA on at this one.
+  [[ -f $pin ]] && ppa_on && exit 1
   [[ ${OMARCHY_INTEL_MEDIA:-} == 1 ]] || xe_intel_gpu || exit 1
   exit 0
 fi
@@ -74,7 +78,7 @@ decline() {
 
 retire_ppa() {
   rm -f "$pin"
-  if apt_source_active "https://ppa.launchpadcontent.net/$ppa/ubuntu" "$UBUNTU_CODENAME"; then
+  if ppa_on; then
     log "Intel's graphics PPA removed"
     add-apt-repository -y -r -n "ppa:$ppa"
   fi
