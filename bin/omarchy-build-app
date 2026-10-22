@@ -304,8 +304,13 @@ build_one() {
   log "$app $tag"
   checkout "$app"
   # Objects and a CMakeCache from another Qt would be reused against the old
-  # tree (make sees nothing newer, cmake keeps its Qt6_DIR): start clean.
-  if links_qt "$app" && [[ $(cat "$(qt_stamp_of "$app")" 2>/dev/null) != "$QT_VERSION" ]]; then
+  # tree (make sees nothing newer, cmake keeps its Qt6_DIR), and so would a tree
+  # an older release's toolchain configured, which is what a build that lost a
+  # library to a release upgrade sits on (meson refuses its install data):
+  # start clean.
+  # shellcheck disable=SC2046  # the paths have no spaces
+  if { links_qt "$app" && [[ $(cat "$(qt_stamp_of "$app")" 2>/dev/null) != "$QT_VERSION" ]]; } ||
+    { [[ -e $(marker_of "$app") ]] && ! links_ok $(linked_of "$app"); }; then
     rm -rf "$(dirname "$(qt_stamp_of "$app")")"
   fi
   case $app in
