@@ -12,12 +12,8 @@ need_root
 log "apt pin: only chromium* from the xtradeb PPA"
 install_file 644 /etc/apt/preferences.d/omarchy-xtradeb-chromium <"$REPO_DIR/etc/apt/preferences.d/omarchy-xtradeb-chromium"
 
-if ! grep -rqs 'xtradeb/apps' /etc/apt/sources.list.d/; then
-  log "xtradeb PPA"
-  # -n: add-apt-repository's own update shrugs off an index it could not
-  # fetch, and chromium then has no candidate; the apt_retry update does not.
-  add-apt-repository -y -n ppa:xtradeb/apps
-fi
+log "xtradeb PPA"
+ppa_source xtradeb/apps
 apt_retry update -qq
 
 # The pin must hold: an upgrade may take nothing from the PPA, and installing
