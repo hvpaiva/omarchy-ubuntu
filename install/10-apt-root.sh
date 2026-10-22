@@ -37,8 +37,14 @@ read_list() { grep -vE '^\s*(#|$)' "$1"; }
 mapfile -t runtime < <(read_list "$REPO_DIR/packages/apt-runtime.txt")
 mapfile -t build < <(read_list "$REPO_DIR/packages/apt-build.txt")
 
+packaged=()
+while read -r p; do
+  candidate=$(apt-cache policy "$p" | awk '/^  Candidate:/ { print $2 }')
+  [[ -z $candidate || $candidate == "(none)" ]] || packaged+=("$p")
+done < <(read_list "$REPO_DIR/packages/apt-if-packaged.txt")
+
 log "apt packages"
-apt_retry install -y --no-install-recommends "${runtime[@]}" "${build[@]}"
+apt_retry install -y --no-install-recommends "${runtime[@]}" "${build[@]}" "${packaged[@]}"
 
 mapfile -t replaced < <(read_list "$REPO_DIR/packages/apt-replaced.txt")
 present=()

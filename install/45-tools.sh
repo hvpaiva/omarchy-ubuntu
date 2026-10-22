@@ -25,7 +25,17 @@ cargo_app() { # cargo_app <bin> <repo url> <tag> [extra cargo args...]
   install -m 0755 "$SRC_DIR/$bin/target/release/$bin" "$LOCAL_BIN/$bin"
 }
 
-# gtk4-layer-shell: tensaku and the share picker need >= 1.0; noble has none.
+# gtk4-layer-shell: tensaku and the share picker need >= 1.0. 26.04 packages
+# it (step 10, packages/apt-if-packaged.txt); noble has none, so it is built
+# into /usr/local, where it would shadow the package's library: a copy built
+# before the release packaged it (an upgrade from noble) steps aside.
+gls_build=$SRC_DIR/gtk4-layer-shell/build
+if apt_installed libgtk4-layer-shell-dev && [[ -f $gls_build/meson-logs/install-log.txt ]]; then
+  log "gtk4-layer-shell: Ubuntu's package from now on; the /usr/local build goes (needs sudo)"
+  quietly sudo ninja -C "$gls_build" uninstall
+  sudo ldconfig
+  rm -rf "$SRC_DIR/gtk4-layer-shell"
+fi
 if ! pkg-config --exists 'gtk4-layer-shell-0 >= 1.0'; then
   log "gtk4-layer-shell $GTK4_LAYER_SHELL_VERSION (meson, /usr/local, needs sudo for install)"
   git_checkout "$SRC_DIR/gtk4-layer-shell" https://github.com/wmww/gtk4-layer-shell "$GTK4_LAYER_SHELL_VERSION"

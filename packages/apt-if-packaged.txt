@@ -1,0 +1,6 @@
+# Packages one Ubuntu release has and another lacks: step 10 installs each
+# where apt has a candidate, and where it has none a step builds the library
+# from source instead.
+
+# 26.04; on noble, step 45 builds it into /usr/local
+libgtk4-layer-shell-dev
