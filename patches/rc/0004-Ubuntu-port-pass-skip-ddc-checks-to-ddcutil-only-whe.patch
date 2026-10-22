@@ -1,4 +1,4 @@
-From 075e297316c5d9cb78215d60cf0de957db2b519e Mon Sep 17 00:00:00 2001
+From 57fbf4e36e4e5e86365a40df32cc810e182598a6 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:52:07 -0300
 Subject: [PATCH 04/12] Ubuntu port: pass --skip-ddc-checks to ddcutil only
@@ -56,5 +56,5 @@ index aab91278..7e04164a 100755
    exit 1
  fi
 -- 
-2.55.0
+2.56.0
 

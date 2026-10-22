@@ -1,4 +1,4 @@
-From 49bf8b250c84b311f12b08089fb43f675972c313 Mon Sep 17 00:00:00 2001
+From f11cea112b8ccb89bc0916a2075779d480c01e7b Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Thu, 24 Sep 2026 09:49:03 -0300
 Subject: [PATCH 11/13] Ubuntu port: mise wrappers exec the tool by absolute
@@ -24,5 +24,5 @@ index 356c3324..569cd586 100755
  
  chmod +x "$HOME/.local/bin/$command"
 -- 
-2.55.0
+2.56.0
 

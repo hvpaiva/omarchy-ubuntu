@@ -1,4 +1,4 @@
-From bfcefa8b3b0c01dec4600af1c1de350bb29bbaed Mon Sep 17 00:00:00 2001
+From c5d360885d2f6cd7cd9ab26436145ef6eae444a5 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Thu, 24 Sep 2026 09:49:03 -0300
 Subject: [PATCH 10/13] Ubuntu port: pass refreshToken to account/read in the
@@ -23,5 +23,5 @@ index 972c164d..a0a0eb90 100755
  
      account = (account_msg.get("result") or {}).get("account") or {}
 -- 
-2.55.0
+2.56.0
 

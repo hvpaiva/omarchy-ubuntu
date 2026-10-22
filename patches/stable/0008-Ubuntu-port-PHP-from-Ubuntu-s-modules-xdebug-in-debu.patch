@@ -1,4 +1,4 @@
-From 05a6b147fa247ed777b84c3ee199c6753ff7cdce Mon Sep 17 00:00:00 2001
+From 58596dec44e1a31ae8b517badc4685346bc1b285 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Wed, 23 Sep 2026 11:50:14 -0300
 Subject: [PATCH 08/13] Ubuntu port: PHP from Ubuntu's modules, xdebug in debug
@@ -77,5 +77,5 @@ index 4551f1e1..22912b88 100755
  python)
    echo -e "Removing Python...\n"
 -- 
-2.55.0
+2.56.0
 

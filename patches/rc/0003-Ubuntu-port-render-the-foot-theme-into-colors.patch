@@ -1,4 +1,4 @@
-From e2008639d53c0c18acb770a2bd9064dfec63cfb3 Mon Sep 17 00:00:00 2001
+From 81438b16b5eb48383bce4ee7c38977e74670cb50 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:08:29 -0300
 Subject: [PATCH 03/12] Ubuntu port: render the foot theme into [colors]
@@ -22,5 +22,5 @@ index 3642fbbc..d2acab02 100644
  background={{ background_strip }}
  # Blur only applies while the background is see-through, as with Glassy windows,
 -- 
-2.55.0
+2.56.0
 
