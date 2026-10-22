@@ -21,6 +21,9 @@ cargo_app() { # cargo_app <bin> <repo url> <tag> [extra cargo args...]
   log "$bin $tag"
   git_checkout "$SRC_DIR/$bin" "$url" "$tag"
   git -C "$SRC_DIR/$bin" submodule update --init --depth 1 --quiet 2>/dev/null || true
+  # cargo's fingerprints do not see the system's libraries move: a binary that
+  # lost one to a release upgrade is rebuilt from a clean target.
+  [[ ! -e $LOCAL_BIN/$bin ]] || links_ok "$LOCAL_BIN/$bin" || rm -rf "$SRC_DIR/$bin/target"
   (cd "$SRC_DIR/$bin" && quietly cargo build --release "$@")
   install -m 0755 "$SRC_DIR/$bin/target/release/$bin" "$LOCAL_BIN/$bin"
 }
