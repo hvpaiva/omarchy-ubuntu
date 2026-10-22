@@ -9,7 +9,8 @@ source "${REPO_DIR:?}/lib/common.sh"
 #   fastfetch: Omarchy's system summary; noble has no package.
 #   LocalSend: the Super+Ctrl+S share menu (`localsend --headless send`).
 #   Voxtype: dictation (Super+Ctrl+X / F9); the .deb ships the CPU, Vulkan and OSD variants.
-#   Ghostty: Omarchy's default terminal, in mkasberg/ghostty-ubuntu's build for 24.04.
+#   Ghostty: Omarchy's default terminal, in mkasberg/ghostty-ubuntu's build for 24.04;
+#     its revision is -ppa2 in the tag, .ppa2 in the asset and ~ppa2 in dpkg.
 #   Aether: the theming app. Omarchy's own package installs the release binary
 #   rather than building it; the release also ships a .deb, built on Ubuntu 24.04.
 debs() {
@@ -18,15 +19,20 @@ gum charmbracelet/gum v$GUM_VERSION gum_${GUM_VERSION}_amd64.deb $GUM_VERSION
 fastfetch fastfetch-cli/fastfetch $FASTFETCH_VERSION fastfetch-linux-amd64.deb $FASTFETCH_VERSION
 localsend localsend/localsend v$LOCALSEND_VERSION LocalSend-${LOCALSEND_VERSION}-linux-x86-64.deb $LOCALSEND_VERSION
 voxtype peteonrails/voxtype v$VOXTYPE_VERSION voxtype_${VOXTYPE_VERSION}-1_amd64.deb $VOXTYPE_VERSION
-ghostty mkasberg/ghostty-ubuntu ${GHOSTTY_DEB/.ppa/-ppa} ghostty_${GHOSTTY_DEB}_amd64_24.04.deb $GHOSTTY_DEB
-aether omacom/aether $AETHER_VERSION aether_${AETHER_VERSION#v}_amd64.deb ${AETHER_VERSION#v}
+ghostty mkasberg/ghostty-ubuntu ${GHOSTTY_DEB/.ppa/-ppa} ghostty_${GHOSTTY_DEB}_amd64_24.04.deb ${GHOSTTY_DEB/.ppa/\~ppa}
 EOF
+  # One of upstream's preinstalls: omarchy-remove-preinstalls drops it and leaves
+  # this marker, and no update of upstream's brings a dropped one back.
+  [[ -f $OMARCHY_HOME/.local/state/omarchy/preinstalls-removed ]] ||
+    echo "aether omacom/aether $AETHER_VERSION aether_${AETHER_VERSION#v}_amd64.deb ${AETHER_VERSION#v}"
 }
 
-at_pin() { # at_pin <name> <version>: the installed package is the pinned version (a Debian revision aside)
+at_pin() { # at_pin <name> <version>: the package is installed at the pinned version (a Debian revision or build number aside)
   local installed
+  # dpkg-query still answers for a package removed but not purged.
+  apt_installed "$1" || return 1
   installed=$(dpkg-query -W -f='${Version}' "$1" 2>/dev/null) || return 1
-  [[ $installed == "$2" || $installed == "$2-"* ]]
+  [[ $installed == "$2" || $installed == "$2"[-+]* ]]
 }
 
 if [[ ${1:-} == --outdated ]]; then
