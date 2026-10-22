@@ -526,6 +526,38 @@ test_source "" "$codename"
 expect "R1 an enabled source at this release counts" yes "$(active)"
 sudo rm -f /etc/apt/sources.list.d/omarchy-test.sources
 
+echo "== R3 a release upgrade: the steps that hold what is per release run once"
+# Stubs in the steps' place record each call: the steps themselves need the
+# network, which the full harness has. The record is in the home, as root may
+# not append to another user's file in /tmp (protected_regular).
+release=$(. /etc/os-release && echo "$VERSION_ID")
+r3_log=$HOME/r3.steps
+r3_steps=(10-apt-root 12-chromium-root 15-extra-debs-root 55-root 57-system-tweaks-root 58-system-extras-root 70-browser-policy-root 47-base-packages)
+: >"$r3_log"
+for s in "${r3_steps[@]}"; do
+  printf '#!/bin/bash\necho "%s $*" >>%s\n' "$s" "$r3_log" >"$PORT/install/$s.sh"
+done
+release_steps=$'10-apt-root \n12-chromium-root \n15-extra-debs-root --release\n55-root \n57-system-tweaks-root \n58-system-extras-root \n70-browser-policy-root \n47-base-packages '
+echo 22.04 >"$PORT/.applied/ubuntu-release"
+omarchy-update-ubuntu -y >/tmp/r3.log 2>&1; st=$?
+expect "R3 updater exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/r3.log
+check "R3 the release change announced" grep -q "Ubuntu 22.04 to $release" /tmp/r3.log
+expect "R3 the per-release steps, in the bootstrap's order" "$release_steps" "$(head -n 8 "$r3_log")"
+expect "R3 the new release recorded" "$release" "$(cat "$PORT/.applied/ubuntu-release")"
+: >"$r3_log"
+omarchy-update-ubuntu -y >/tmp/r3b.log 2>&1 || onfail /tmp/r3b.log
+check "R3 once: the next update runs none of them for the release" sh -c "! grep -q -- --release '$r3_log' && ! grep -q 'Ubuntu 22.04 to' /tmp/r3b.log"
+# A port older than the record: the release Quickshell's binary names.
+rm -f "$PORT/.applied/ubuntu-release"
+mkdir -p "$HOME/.local/bin"
+printf 'omarchy-ubuntu (Ubuntu 22.04, Qt 6.12.0 via aqtinstall)\n' >"$HOME/.local/bin/quickshell"
+: >"$r3_log"
+omarchy-update-ubuntu -y >/tmp/r3c.log 2>&1 || onfail /tmp/r3c.log
+check "R3 no record: the release Quickshell was built for counts" grep -q -- '15-extra-debs-root --release' "$r3_log"
+rm -f "$HOME/.local/bin/quickshell" "$r3_log"
+git -C "$PORT" checkout -q -- install/
+
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
 # bootstrap refuses a channel other than the recorded one: set aside, as a

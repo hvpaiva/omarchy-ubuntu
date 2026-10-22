@@ -102,6 +102,18 @@ backup_once() {
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# links_ok <file...>: each file is there and finds every library it links. A
+# release upgrade, or a new soname from a PPA, takes libraries away from a
+# build that is still at its pin: such a build is redone.
+links_ok() {
+  local f
+  for f in "$@"; do
+    [[ -e $f ]] || return 1
+    # grep reads all of it (no -q): ldd cut off by a SIGPIPE fails the pipe.
+    if ldd "$f" 2>/dev/null | grep -F 'not found' >/dev/null; then return 1; fi
+  done
+}
+
 # wayland_compat_cflags: what a build against Qt's private Wayland headers
 # needs. Qt >= 6.10's qwayland-wayland.h declares wl_fixes, which only exists in
 # libwayland >= 1.23's generated header; noble ships 1.22 (26.04 1.24). There a

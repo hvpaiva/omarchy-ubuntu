@@ -330,6 +330,36 @@ fi
 # OMARCHY_UPDATE_TOOLS=0 leaves all of them to the user.
 applied_dir=$PORT_DIR/.applied
 mkdir -p "$applied_dir"
+
+# A release upgrade (24.04 to 26.04) turns every PPA and third-party source
+# off, makes sudo-rs the sudo and takes libraries away from what was built
+# here. Once per release the root steps that hold what is per release run
+# again, as a bootstrap on it would: sources and apt packages (10, 12), the
+# .debs built per release (15 --release), classic sudo (55), the sudoers rules
+# and system tweaks (57, 58, 70); then upstream's default packages the upgrade
+# removed (47) and the Install menu's .debs taken in the old release's build
+# (omarchy-pkg-ubuntu release-refresh). The tool steps below redo every build
+# that lost a library.
+# Without a record (a port older than this), the release Quickshell was built
+# for, which its binary names, says where the machine came from.
+release_now=$(. /etc/os-release && echo "$VERSION_ID")
+release_was=$(cat "$applied_dir/ubuntu-release" 2>/dev/null) ||
+  release_was=$(grep -aom1 'omarchy-ubuntu (Ubuntu [0-9.]*' "$HOME/.local/bin/quickshell" 2>/dev/null | sed 's/.* //') ||
+  true
+if [[ -n $release_was && $release_was != "$release_now" ]]; then
+  step "Ubuntu $release_was to $release_now"
+  echo "The port's sources, packages, sudo and system pieces follow the new release (root)."
+  for root_step in 10-apt-root 12-chromium-root "15-extra-debs-root --release" 55-root 57-system-tweaks-root 58-system-extras-root 70-browser-policy-root; do
+    read -r script args <<<"$root_step"
+    # shellcheck disable=SC2086  # the step's one option, or none
+    run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/$script.sh" $args
+  done
+  REPO_DIR=$PORT_DIR "$PORT_DIR/install/47-base-packages.sh"
+  "$OMARCHY_PATH/bin/omarchy-pkg-ubuntu" release-refresh ||
+    echo -e "\e[33mAn Install-menu package is still the old release's build; installing it again from the menu takes $release_now's.\e[0m"
+fi
+echo "$release_now" >"$applied_dir/ubuntu-release"
+
 if [[ ${OMARCHY_UPDATE_TOOLS:-1} != 0 ]]; then
   step "Pinned tools"
   # The apt lists first: a build below may need a package a machine bootstrapped

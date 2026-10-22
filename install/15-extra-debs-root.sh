@@ -1,7 +1,8 @@
 #!/bin/bash
 # Tools that Ubuntu does not package: official .deb releases, pinned in
 # versions.env. Root (dpkg). `--outdated` lists, as any user, the ones whose
-# installed version is not the pinned one, for omarchy-update-ubuntu.
+# installed version is not the pinned one, for omarchy-update-ubuntu;
+# `--release` reinstalls the ones built per Ubuntu release.
 source "${REPO_DIR:?}/lib/common.sh"
 
 # name, GitHub repository, release tag, asset, the version dpkg then reports.
@@ -44,11 +45,20 @@ if [[ ${1:-} == --outdated ]]; then
 fi
 need_root
 
+# --release (after a release upgrade): the .debs built for one Ubuntu release,
+# named after it, again at their pins, as the new release's build.
+for_release=0
+[[ ${1:-} != --release ]] || for_release=1
+
 install_deb() { # install_deb <name> <github repo> <tag> <asset> <version>
-  local name=$1 repo=$2 tag=$3 asset=$4 version=$5
+  local name=$1 repo=$2 tag=$3 asset=$4 version=$5 again=()
   if at_pin "$name" "$version"; then
-    note "unchanged $name $version"
-    return
+    if (( for_release )) && [[ $asset == *"_$UBUNTU_VERSION.deb" ]]; then
+      again=(--reinstall)
+    else
+      note "unchanged $name $version"
+      return
+    fi
   fi
   log "$name $version from $repo $tag"
   # An asset named without its version (fastfetch's) would otherwise come back
@@ -56,7 +66,7 @@ install_deb() { # install_deb <name> <github repo> <tag> <asset> <version>
   rm -f "$DOWNLOADS/$asset"
   su -s /bin/bash "$OMARCHY_USER" -c "REPO_DIR='$REPO_DIR'; source '$REPO_DIR/lib/common.sh'; github_release_download '$repo' '$tag' '$asset'"
   # The .deb is local; what it depends on comes through apt, the PPAs included.
-  apt_retry install -y --allow-downgrades "$DOWNLOADS/$asset"
+  apt_retry install -y --allow-downgrades "${again[@]}" "$DOWNLOADS/$asset"
 }
 
 while read -r name repo tag asset version; do

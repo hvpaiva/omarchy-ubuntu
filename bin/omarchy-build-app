@@ -80,10 +80,23 @@ links_qt() {
   [[ $1 != owe && $1 != omarchy-hyprland-titlebars ]]
 }
 
+# What a build put in place that links libraries (owe's programs, as many as
+# its tag installs).
+linked_of() {
+  local f
+  case $1 in
+    owe) for f in "$LOCAL_BIN"/owe "$LOCAL_BIN"/owed "$LOCAL_BIN"/owe-*; do [[ ! -e $f ]] || echo "$f"; done ;;
+    owe-lockfeed) echo "$QT_DIR/qml/Owe/LockFeed/libowe_lockfeed.so" ;;
+    *) marker_of "$1" ;;
+  esac
+}
+
 up_to_date() {
   local app=$1 tag
   tag=$(version_of "$app")
   [[ -e $(marker_of "$app") ]] || return 1
+  # shellcheck disable=SC2046  # the paths have no spaces
+  links_ok $(linked_of "$app") || return 1
   git -C "$(src_of "$app")" describe --tags 2>/dev/null | grep -q "$tag" || return 1
   if links_qt "$app"; then
     [[ $(cat "$(qt_stamp_of "$app")" 2>/dev/null) == "$QT_VERSION" ]] || return 1
@@ -154,8 +167,8 @@ ensure_ecm() {
 # the QML module.
 layer_shell_qt_installed() {
   [[ -f $QT_DIR/lib/cmake/LayerShellQt/LayerShellQtConfig.cmake &&
-    -f $QT_DIR/plugins/wayland-shell-integration/liblayer-shell.so &&
-    -f $QT_DIR/qml/org/kde/layershell/qmldir ]]
+    -f $QT_DIR/qml/org/kde/layershell/qmldir ]] &&
+    links_ok "$QT_DIR/plugins/wayland-shell-integration/liblayer-shell.so"
 }
 
 ensure_layer_shell_qt() {
