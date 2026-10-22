@@ -408,6 +408,12 @@ if grep -qs -- '--activate' "$OMARCHY_PATH/bin/omarchy-theme-set-fcitx5"; then
     break
   done
 fi
+# A gpu-screen-recorder build leaves its KMS server in ~/.local/bin, without
+# the capability; root's copy in /usr/local/bin replaces it (step 55).
+if [[ -f $HOME/.local/bin/gsr-kms-server ]]; then
+  echo "gpu-screen-recorder's KMS server goes to /usr/local/bin with cap_sys_admin (root)."
+  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/55-root.sh" --gsr-kms-server
+fi
 
 # Intel's media stack for a GPU on the xe driver (step 13), on a machine
 # bootstrapped before the step; one whose owner undid it keeps noble's.

@@ -3,7 +3,7 @@ ARG GUM_VERSION=0.17.0
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git sudo ca-certificates curl bsdutils util-linux coreutils pciutils procps kmod udev \
-      software-properties-common gnupg zstd apparmor jq \
+      software-properties-common gnupg zstd apparmor jq libcap2-bin \
     && rm -rf /var/lib/apt/lists/* \
     # docker-clean deletes every .deb after each install: the apt cache
     # volume full.sh mounts would never carry anything to the next run.

@@ -425,6 +425,13 @@ expect "S14 refused" 1 "$st"
 grep -q "switch with: omarchy-channel-set rc" /tmp/s14.log && ok "S14 points at omarchy-channel-set" || { ko "S14 points at omarchy-channel-set"; tail -3 /tmp/s14.log; }
 expect "S14 channel untouched" stable "$(cat "$HOME/.local/state/omarchy/channel")"
 
+echo "== S21 the screen recorder's KMS server goes to root, with its capability"
+cp /usr/bin/true "$HOME/.local/bin/gsr-kms-server"
+omarchy-update-ubuntu -y >/tmp/s21.log 2>&1 || onfail /tmp/s21.log
+expect "S21 root's, in /usr/local/bin" "root 755" "$(stat -c '%U %a' /usr/local/bin/gsr-kms-server 2>/dev/null)"
+expect "S21 with cap_sys_admin" "cap_sys_admin=ep" "$(getcap /usr/local/bin/gsr-kms-server 2>/dev/null | awk '{print $NF}')"
+check "S21 none left in ~/.local/bin" test ! -e "$HOME/.local/bin/gsr-kms-server"
+
 echo "== S19 removed preinstalls stay out of the steps"
 common() { (cd "$PORT" && REPO_DIR=$PORT bash -c "source lib/common.sh; $1") 2>/dev/null | tr '\n' ' ' | sed 's/ $//'; }
 expect "S19 nothing removed without the marker" "" "$(common removed_preinstalls)"
