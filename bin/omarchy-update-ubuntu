@@ -69,7 +69,53 @@ stay_awake() {
   fi
   (umask 022 && omarchy-update-stay-awake "$@")
 }
-trap 'stay_awake stop' EXIT
+
+# 4.5's helpers drop sudo's timestamp on entry unless an update holds the
+# session, so each would ask again; upstream's update asks once, keeps the
+# timestamp fresh while it runs and drops it at the end. Only on a terminal:
+# from the shell's menu the root steps go through pkexec.
+export OMARCHY_UPDATE_SUDO_SESSION=1
+update_authorized=0
+sudo_keepalive_pid=""
+authorize_update() {
+  [[ -t 0 ]] || return 0
+  # A command rather than sudo -v: under the default verifypw=all, -v prompts
+  # even when passwordless sudo is enabled.
+  /usr/bin/sudo /usr/bin/true || return 1
+  update_authorized=1
+  local update_pid=$$
+  (
+    [[ -z ${OMARCHY_UPDATE_LOCK_FD:-} ]] || exec {OMARCHY_UPDATE_LOCK_FD}>&-
+    set +e
+    trap - EXIT ERR
+    sleep_pid=""
+    trap '[[ -z $sleep_pid ]] || kill "$sleep_pid" 2>/dev/null; exit 0' TERM
+    while :; do
+      sleep 60 &
+      sleep_pid=$!
+      wait "$sleep_pid"
+      kill -0 "$update_pid" 2>/dev/null || exit 0
+      /usr/bin/sudo -n /usr/bin/true 2>/dev/null || exit 0
+    done
+  ) &
+  sudo_keepalive_pid=$!
+}
+end_update_authorization() {
+  if [[ -n $sudo_keepalive_pid ]]; then
+    kill "$sudo_keepalive_pid" 2>/dev/null || true
+    wait "$sudo_keepalive_pid" 2>/dev/null || true
+    sudo_keepalive_pid=""
+  fi
+  if (( update_authorized )); then
+    /usr/bin/sudo -k
+    update_authorized=0
+  fi
+}
+start_update() {
+  authorize_update || { echo "sudo authorization failed; nothing was changed." >&2; exit 1; }
+  stay_awake start
+}
+trap 'end_update_authorization; stay_awake stop' EXIT
 
 # On a terminal sudo asks there; from the shell's menu the polkit dialog asks.
 run_root() {
@@ -188,10 +234,10 @@ at_target() {
 
 if [[ -z $target ]]; then
   echo "dev channel: the $BRANCH branch is left as it is."
-  stay_awake start
+  start_update
 elif at_target; then
   echo "The checkout is already at $target."
-  stay_awake start
+  start_update
 else
   whats_new="What's new: https://github.com/omacom/omarchy/compare/$base_before...${target#origin/}"
   [[ $target != v* ]] || whats_new="What's new: https://github.com/omacom/omarchy/releases/tag/$target"
@@ -211,7 +257,7 @@ else
     exit 0
   fi
 
-  stay_awake start
+  start_update
 
   if [[ -n $OMARCHY_FORK ]]; then
     # A fork's branch is the user's to carry; a rebase keeps what they added.
@@ -490,6 +536,7 @@ if [[ -n $shell_errors ]]; then
   echo -e "\e[33mIf upstream raised the minimum Quickshell version, rebuild it: $PORT_DIR/bootstrap.sh 40\e[0m"
 fi
 
+end_update_authorization
 stay_awake stop
 trap - EXIT
 
