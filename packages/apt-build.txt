@@ -52,6 +52,7 @@ libpipewire-0.3-dev
 libglib2.0-dev
 liblua5.4-dev
 libsystemd-dev
+systemd-dev
 
 # cliamp (Go audio bindings)
 libasound2-dev
