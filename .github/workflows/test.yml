@@ -36,7 +36,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
+      # The whole history: the scenarios exercise the port's own git (its
+      # self-update, what the remote carries), which a shallow clone fails.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Updater and channel scenarios
         run: test/harness/run.sh "$PWD" HEAD | tee scenarios.log
       - name: Summary
@@ -59,6 +63,8 @@ jobs:
         channel: [stable, rc]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/apt-cache
