@@ -426,17 +426,26 @@ grep -q "switch with: omarchy-channel-set rc" /tmp/s14.log && ok "S14 points at 
 expect "S14 channel untouched" stable "$(cat "$HOME/.local/state/omarchy/channel")"
 
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
+# The channel file is in the home getent names, whatever HOME says, and the
+# bootstrap refuses a channel other than the recorded one: set aside, as a
+# machine bootstrapped on edge would have none.
+mv "$HOME/.local/state/omarchy/channel" /tmp/channel.saved
 export HOME=/tmp/edgehome; mkdir -p "$HOME"; export OMARCHY_PATH=$HOME/.local/share/omarchy
 (cd "$PORT" && OMARCHY_CHANNEL=edge REPO_DIR=$PORT ./bootstrap.sh 30) >/tmp/s10.log 2>&1; st=$?
 if [[ $st == 0 ]]; then
   ok "S10 edge bootstrap applied the rc series on $(git -C "$OMARCHY_PATH" describe --tags)"
-  expect "S10 edge patches on top" "$RC_PATCHES" "$(git -C "$OMARCHY_PATH" rev-list --count "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)..ubuntu")"
-else
-  echo "      edge bootstrap exit $st: $(grep -m1 -E 'does not rebase|does not apply' /tmp/s10.log)"
+  # Edge's base is upstream's head, past the last tag.
+  expect "S10 edge patches on top" "$RC_PATCHES" "$(git -C "$OMARCHY_PATH" rev-list --count origin/HEAD..ubuntu)"
+elif conflict=$(grep -m1 -E 'does not rebase|does not apply' /tmp/s10.log); then
+  echo "      edge bootstrap exit $st: $conflict"
   expect "S10 failed step leaves no branch behind" "" "$(git -C "$OMARCHY_PATH" branch --list ubuntu)"
   check "S10 failed step leaves no rebase in progress" test ! -d "$OMARCHY_PATH/.git/rebase-merge" -a ! -d "$OMARCHY_PATH/.git/rebase-apply"
+else
+  ko "S10 edge bootstrap failed, and not on a patch (exit $st)"
+  onfail /tmp/s10.log
 fi
 export HOME=/home/tester; export OMARCHY_PATH=$HOME/.local/share/omarchy
+mv /tmp/channel.saved "$HOME/.local/state/omarchy/channel"
 
 echo
 echo "passed $pass, failed $fail"
