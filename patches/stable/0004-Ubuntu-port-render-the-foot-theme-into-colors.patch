@@ -1,4 +1,4 @@
-From d32861f16251b278fad30afacfc39d2aefb00630 Mon Sep 17 00:00:00 2001
+From b09a9f982d788047ead186d594d2835f849aaea2 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:08:29 -0300
 Subject: [PATCH 04/13] Ubuntu port: render the foot theme into [colors]
@@ -22,5 +22,5 @@ index a3764b20..ae766e07 100644
  background={{ background_strip }}
  selection-foreground={{ selection_foreground_strip }}
 -- 
-2.55.0
+2.56.0
 

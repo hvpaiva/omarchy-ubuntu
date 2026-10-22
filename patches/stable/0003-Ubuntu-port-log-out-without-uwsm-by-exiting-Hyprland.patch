@@ -1,4 +1,4 @@
-From 036f06c06a821e715f1fb8dd5b815404a50ca77f Mon Sep 17 00:00:00 2001
+From df14dacc07cfbbb808f856dd2635ea03b798d630 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 21:18:11 -0300
 Subject: [PATCH 03/13] Ubuntu port: log out without uwsm by exiting Hyprland
@@ -31,5 +31,5 @@ index cb0fd660..b4eb0bcb 100755
  omarchy-osd -i logout -m "Logging out" -d 5000
  
 -- 
-2.55.0
+2.56.0
 

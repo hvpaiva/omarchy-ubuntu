@@ -1,4 +1,4 @@
-From 55107252c680c6ccc3d2644768129087a6434c83 Mon Sep 17 00:00:00 2001
+From 77f1056dbb91e71790d0a874b859988525592e08 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Mon, 28 Sep 2026 00:37:13 -0300
 Subject: [PATCH 12/13] Ubuntu port: fzf key bindings from
@@ -27,5 +27,5 @@ index c3d8c97a..7f5a7e60 100644
  
  source "$OMARCHY_PATH/default/bash/completions"
 -- 
-2.55.0
+2.56.0
 

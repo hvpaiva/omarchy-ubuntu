@@ -1,4 +1,4 @@
-From 6fdb92b874c1768b04565079a6fc796ad3277e6c Mon Sep 17 00:00:00 2001
+From b484dfff8b228e84ff6ba01c5d28004129b9619a Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -12,19 +12,19 @@ resolves Arch names to apt aliases and recipes (vendor repositories and
 and carries the fuzzy pickers over apt. The menu's package guards read
 dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
 ---
- bin/omarchy-install-and-launch  |   4 +
- bin/omarchy-pkg-add             |   3 +
- bin/omarchy-pkg-aur-add         |   4 +
- bin/omarchy-pkg-aur-install     |   6 +
- bin/omarchy-pkg-drop            |   3 +
- bin/omarchy-pkg-install         |   3 +
- bin/omarchy-pkg-installed       |  18 +
- bin/omarchy-pkg-missing         |   3 +
- bin/omarchy-pkg-present         |   3 +
- bin/omarchy-pkg-remove          |   3 +
- bin/omarchy-pkg-ubuntu          | 924 ++++++++++++++++++++++++++++++++
- shell/plugins/menu/MenuModel.js |  13 +-
- 12 files changed, 986 insertions(+), 1 deletion(-)
+ bin/omarchy-install-and-launch  |    4 +
+ bin/omarchy-pkg-add             |    3 +
+ bin/omarchy-pkg-aur-add         |    4 +
+ bin/omarchy-pkg-aur-install     |    6 +
+ bin/omarchy-pkg-drop            |    3 +
+ bin/omarchy-pkg-install         |    3 +
+ bin/omarchy-pkg-installed       |   18 +
+ bin/omarchy-pkg-missing         |    3 +
+ bin/omarchy-pkg-present         |    3 +
+ bin/omarchy-pkg-remove          |    3 +
+ bin/omarchy-pkg-ubuntu          | 1034 +++++++++++++++++++++++++++++++
+ shell/plugins/menu/MenuModel.js |   13 +-
+ 12 files changed, 1096 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..b7843855
+index 00000000..59a4b4a4
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,924 @@
+@@ -0,0 +1,1034 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -209,10 +209,7 @@ index 00000000..b7843855
 +OPR_STATE=/var/lib/omarchy-ubuntu/opr
 +
 +declare -A APT_ALIASES=(
-+  [google-chrome]="google-chrome-stable"
 +  [vi]="vim-tiny"
-+  [visual-studio-code-bin]="code"
-+  [spotify]="spotify-client"
 +  [pam-u2f]="libpam-u2f"
 +  [dropbox]="nautilus-dropbox"
 +  [dropbox-cli]="nautilus-dropbox"
@@ -236,6 +233,44 @@ index 00000000..b7843855
 +  [retroarch-assets-xmb]="retroarch-assets"
 +  [base-devel]="build-essential"
 +  [zram-generator]="systemd-zram-generator"
++  [avahi]="avahi-daemon"
++  [nss-mdns]="libnss-mdns"
++  [bluez-utils]="bluez"
++  [gvfs-mtp]="gvfs-backends"
++  [gvfs-nfs]="gvfs-backends"
++  [gvfs-smb]="gvfs-backends"
++  [networkmanager]="network-manager"
++  [openssh]="openssh-server"
++  [inetutils]="hostname"
++  [noto-fonts]="fonts-noto-core"
++  [noto-fonts-cjk]="fonts-noto-cjk"
++  [noto-fonts-emoji]="fonts-noto-color-emoji"
++  [woff2-font-awesome]="fonts-font-awesome"
++  [yaru-icon-theme]="yaru-theme-icon"
++  [sushi]="gnome-sushi"
++  [nvim]="neovim"
++  [fd]="fd-find"
++  [fcitx5-gtk]="fcitx5-frontend-gtk3"
++  [fcitx5-qt]="fcitx5-frontend-qt6"
++  [tesseract]="tesseract-ocr"
++  [tesseract-data-eng]="tesseract-ocr-eng"
++  [zbar]="zbar-tools"
++  [libvips]="libvips-tools"
++  [libsecret]="libsecret-1-0"
++  [libfprint]="libfprint-2-2"
++  [libfido2]="fido2-tools"
++  [lua51]="lua5.1"
++  [mariadb-libs]="libmariadb3"
++  [postgresql-libs]="libpq5"
++  [python-gobject]="python3-gi"
++  [python-poetry-core]="python3-poetry-core"
++  [nautilus-python]="python3-nautilus"
++  [dotnet-runtime]="dotnet-runtime-8.0"
++  [qemu-user-static-binfmt]="qemu-user-static"
++  [cups-pdf]="printer-driver-cups-pdf"
++  [sof-firmware]="firmware-sof-signed"
++  [vulkan-intel]="mesa-vulkan-drivers"
++  [vulkan-radeon]="mesa-vulkan-drivers"
 +)
 +
 +declare -A RECIPES=(
@@ -251,6 +286,12 @@ index 00000000..b7843855
 +  [openai-codex-desktop]="pool chatgpt https://persistent.oaistatic.com/codex-app-prod/linux/deb stable main"
 +  [perplexity]="pool perplexity https://packages.perplexity.ai/deb stable main"
 +  [microsoft-edge-stable-bin]="pool microsoft-edge-stable https://packages.microsoft.com/repos/edge stable main"
++  [google-chrome]="pool google-chrome-stable https://dl.google.com/linux/chrome/deb stable main"
++  [visual-studio-code-bin]="pool code https://packages.microsoft.com/repos/code stable main"
++  [cursor-bin]="pool cursor https://downloads.cursor.com/aptrepo stable main"
++  [slack-desktop]="pool slack-desktop https://packagecloud.io/slacktechnologies/slack/debian jessie main"
++  [spotify]="pool spotify-client https://repository.spotify.com stable non-free"
++  [obsidian]="deb obsidian github:obsidianmd/obsidian-releases:obsidian_.*_amd64\.deb$"
 +  [brave-bin]="repo brave brave-browser"
 +  [brave-origin-bin]="repo brave brave-origin"
 +  [signal-desktop]="repo signal signal-desktop"
@@ -272,6 +313,13 @@ index 00000000..b7843855
 +  [disktree-bin]="opr disktree-bin"
 +  [gliff]="opr gliff"
 +  [superwhisper-bin]="opr superwhisper-bin python3-gi gir1.2-gtk-4.0 gir1.2-atspi-2.0 gir1.2-gdkpixbuf-2.0 python3-fonttools"
++  [claude-desktop]="opr claude-desktop"
++  [supergfxctl]="opr supergfxctl"
++  [asdcontrol]="opr asdcontrol"
++  [tzupdate]="opr tzupdate"
++  [tobi-try]="opr tobi-try ruby"
++  [omarchy-nvim]="opr omarchy-nvim"
++  [ttf-ia-writer]="opr ttf-ia-writer"
 +  [moonlight-qt]="flatpak com.moonlight_stream.Moonlight"
 +  [zed]="custom zed"
 +  [omacalc]="custom omacalc"
@@ -289,11 +337,28 @@ index 00000000..b7843855
 +  [qt6-multimedia]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
 +  [qt6-svg]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
 +  [qt6-wayland]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
++  [qt6-imageformats]="skip provided by the port's Qt in ~/.local/opt/Qt, noble's 6.4 is too old for these apps"
++  [expac]="skip pacman tooling; the port's packages come through dpkg and apt"
++  [pacman-contrib]="skip pacman tooling; the port's packages come through dpkg and apt"
++  [yay]="skip the AUR helper; the port has no AUR"
++  [kernel-modules-hook]="skip keeps the running kernel's modules through a pacman upgrade; Ubuntu keeps the old kernel installed"
++  [vulkan-asahi]="skip Apple Silicon's Vulkan driver; the port is amd64"
++  [sddm]="skip GDM stays the display manager (docs/deviations.md of the port)"
++  [ufw-docker]="skip the port leaves the firewall to Ubuntu (docs/deviations.md of the port)"
 +  [zen-browser-bin]="custom zen"
 +  [steam]="custom steam"
++  [ollama]="custom ollama"
++  [ollama-cuda]="custom ollama"
++  [ollama-vulkan]="custom ollama"
++  [ollama-rocm]="custom ollama-rocm"
 +  [helix]="mise helix helix hx"
 +  [bitwarden-cli]="mise bitwarden bw"
 +  [symfony-cli]="mise github:symfony-cli/symfony-cli symfony"
++  [lazygit]="mise lazygit lazygit"
++  [lazydocker]="mise lazydocker lazydocker"
++  [starship]="mise starship starship"
++  [usage]="mise usage usage"
++  [dua-cli]="mise dua dua"
 +  [ttf-cascadia-mono-nerd]="nerdfont CascadiaMono CaskaydiaMono"
 +  [ttf-meslo-nerd]="nerdfont Meslo MesloLG"
 +  [ttf-firacode-nerd]="nerdfont FiraCode FiraCode"
@@ -301,6 +366,7 @@ index 00000000..b7843855
 +  [ttf-bitstream-vera-mono-nerd]="nerdfont BitstreamVeraSansMono BitstromWera"
 +  [ttf-iosevka-nerd]="nerdfont Iosevka Iosevka"
 +  [ttf-jetbrains-mono-nerd]="nerdfont JetBrainsMono JetBrainsMono"
++  [ttf-jetbrains-mono-nerd-basic]="nerdfont JetBrainsMono JetBrainsMono"
 +  [lib32-vulkan-intel]="i386 mesa-vulkan-drivers"
 +  [lib32-vulkan-radeon]="i386 mesa-vulkan-drivers"
 +  [lib32-nvidia-utils]="custom nvidia-i386"
@@ -666,7 +732,14 @@ index 00000000..b7843855
 +  with_workdir build_hermes_pty
 +}
 +
++# What fontconfig's pacman hook does after a font package.
++after_opr_ttf_ia_writer() {
++  as_root fc-cache -s >/dev/null
++}
++
 +install_flatpak() {
++  # Ubuntu's desktop ships snap, not flatpak.
++  command -v flatpak >/dev/null || as_root apt-get install -y flatpak || return 1
 +  flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo 2>/dev/null ||
 +    as_root flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 +  flatpak install -y --noninteractive -- flathub "$1"
@@ -833,6 +906,43 @@ index 00000000..b7843855
 +
 +remove_custom_zen() {
 +  as_root rm -rf /opt/zen-browser /usr/bin/zen-browser /usr/share/applications/zen.desktop
++}
++
++# Ollama's release tarballs, where its own install script puts them: the base
++# one carries the CPU, CUDA and Vulkan runners, ROCm's comes as an addition.
++fetch_and_install_ollama() {
++  local tarball
++  for tarball in "$@"; do
++    download "github:ollama/ollama:/${tarball//./\\.}$" "$tarball" || return 1
++  done
++  as_root rm -rf /usr/local/lib/ollama || return 1
++  for tarball in "$@"; do
++    as_root tar --zstd -xf "$tarball" -C /usr/local --no-same-owner || return 1
++  done
++}
++
++install_custom_ollama() {
++  with_workdir fetch_and_install_ollama ollama-linux-amd64.tar.zst
++}
++
++install_custom_ollama_rocm() {
++  with_workdir fetch_and_install_ollama ollama-linux-amd64.tar.zst ollama-linux-amd64-rocm.tar.zst
++}
++
++installed_custom_ollama() {
++  [[ -x /usr/local/bin/ollama ]]
++}
++
++installed_custom_ollama_rocm() {
++  [[ -x /usr/local/bin/ollama ]] && compgen -G "/usr/local/lib/ollama/rocm*" >/dev/null
++}
++
++remove_custom_ollama() {
++  as_root rm -rf /usr/local/bin/ollama /usr/local/lib/ollama
++}
++
++remove_custom_ollama_rocm() {
++  remove_custom_ollama
 +}
 +
 +libretro_core_path() {
@@ -1139,5 +1249,5 @@ index c6dc7ed3..180d7c1a 100644
      + 'omarchy-pkg-missing() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 0; done; return 1; }\n'
      + 'omarchy-cmd-present() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0; }\n'
 -- 
-2.55.0
+2.56.0
 

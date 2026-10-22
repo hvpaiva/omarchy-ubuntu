@@ -1,4 +1,4 @@
-From 40b278f8d35479067840896530b43da684813132 Mon Sep 17 00:00:00 2001
+From 0c393397c8963c6b2a30cae941958faf97b8c996 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 20:30:18 -0300
 Subject: [PATCH 02/13] Ubuntu port: hand omarchy-update to
@@ -31,5 +31,5 @@ index e71e8086..565f99ea 100755
  trap 'omarchy-update-stay-awake stop' EXIT
  
 -- 
-2.55.0
+2.56.0
 

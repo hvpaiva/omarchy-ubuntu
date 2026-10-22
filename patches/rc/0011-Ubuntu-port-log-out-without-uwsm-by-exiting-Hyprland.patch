@@ -1,4 +1,4 @@
-From 553311f692ea45c3dce036cf0e829670d8d43a16 Mon Sep 17 00:00:00 2001
+From 989eafe2bd981c7c424132dcc569fbc5e7797be4 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Wed, 21 Oct 2026 11:04:57 -0300
 Subject: [PATCH 11/12] Ubuntu port: log out without uwsm by exiting Hyprland
@@ -33,5 +33,5 @@ index 02ab05c3..9be20f1f 100755
    shutdown) command=(systemctl poweroff --no-wall) ;;
    *) echo "$usage" >&2; exit 2 ;;
 -- 
-2.55.0
+2.56.0
 
