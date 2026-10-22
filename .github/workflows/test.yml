@@ -51,8 +51,6 @@ jobs:
       fail-fast: false
       matrix:
         channel: [stable, rc]
-    env:
-      APT_CACHE_DIR: ${{ runner.temp }}/apt-cache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -60,7 +58,11 @@ jobs:
           path: ${{ runner.temp }}/apt-cache
           key: apt-cache-${{ matrix.channel }}-${{ github.run_id }}
           restore-keys: apt-cache-${{ matrix.channel }}-
+      # The runner context is a step's, not a job's: the cache directory is
+      # named on each step that touches it.
       - name: Full bootstrap, steps 10 to 45
+        env:
+          APT_CACHE_DIR: ${{ runner.temp }}/apt-cache
         run: |
           mkdir -p "$APT_CACHE_DIR"
           OMARCHY_CHANNEL=${{ matrix.channel }} test/harness/full.sh "$PWD" HEAD 10 12 15 20 25 30 40 45 | tee bootstrap.log
@@ -77,6 +79,8 @@ jobs:
       # reads it as the runner's user.
       - name: Hand the apt cache back to the runner
         if: always()
+        env:
+          APT_CACHE_DIR: ${{ runner.temp }}/apt-cache
         run: sudo chown -R "$(id -u):$(id -g)" "$APT_CACHE_DIR"
       - uses: actions/upload-artifact@v4
         if: always()
