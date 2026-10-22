@@ -416,9 +416,10 @@ if [[ -f $HOME/.local/bin/gsr-kms-server ]]; then
 fi
 
 # Intel's media stack for a GPU on the xe driver (step 13), on a machine
-# bootstrapped before the step; one whose owner undid it keeps noble's.
+# bootstrapped before the step; one whose owner undid it keeps the archive's.
+# On a release whose own stack drives xe, the step retires the PPA instead.
 if REPO_DIR=$PORT_DIR "$PORT_DIR/install/13-intel-media-root.sh" --due; then
-  echo "This Intel GPU runs on the xe driver, for which noble's media stack has no hardware video; installing Intel's (root)."
+  echo "Intel's media stack for the GPU on the xe driver (root)."
   run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" OMARCHY_INTEL_MEDIA="${OMARCHY_INTEL_MEDIA:-}" "$PORT_DIR/install/13-intel-media-root.sh"
 fi
 

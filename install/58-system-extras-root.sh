@@ -25,11 +25,10 @@ fi
 etc=$OMARCHY_PATH/etc
 sysd=$OMARCHY_PATH/default/systemd
 
-log "mise: newest package from its apt repository"
-apt_retry install -y --only-upgrade mise
-
-log "packages Omarchy's base has and the port lacked: Cantarell (GTK's default font), printer setup, pipewire-jack, qemu-user-static, tldr"
-apt_retry install -y --no-install-recommends fonts-cantarell system-config-printer pipewire-jack qemu-user-static tldr
+# qemu's user emulators and tldr, once here too, are upstream base names that
+# step 47 resolves for each release.
+log "packages Omarchy's base has and the port lacked: Cantarell (GTK's default font), printer setup, pipewire-jack"
+apt_retry install -y --no-install-recommends fonts-cantarell system-config-printer pipewire-jack
 
 log "systemd-oomd: apps are the kill candidates, not the whole session"
 install_file 644 /etc/systemd/user/app.slice.d/10-oomd.conf <"$sysd/user/app.slice.d/10-oomd.conf"

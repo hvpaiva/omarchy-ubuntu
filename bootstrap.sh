@@ -1,5 +1,5 @@
 #!/bin/bash
-# Omarchy 4 on Ubuntu 24.04: one entry point, idempotent, resumable.
+# Omarchy 4 on Ubuntu 24.04 and 26.04 LTS: one entry point, idempotent, resumable.
 #
 #   git clone <this repo> ~/.local/share/omarchy-ubuntu
 #   ~/.local/share/omarchy-ubuntu/bootstrap.sh            # everything
@@ -20,9 +20,10 @@ source "$REPO_DIR/lib/common.sh"
 
 need_user
 
-if ! grep -q 'VERSION_ID="24.04"' /etc/os-release; then
-  warn "this bootstrap is written for Ubuntu 24.04; continuing anyway"
-fi
+case $UBUNTU_VERSION in
+  24.04 | 26.04) ;;
+  *) warn "this bootstrap is written for Ubuntu 24.04 and 26.04, not ${UBUNTU_VERSION:-this system}; continuing anyway" ;;
+esac
 
 # The channel is chosen here (OMARCHY_CHANNEL=rc ./bootstrap.sh, stable
 # otherwise) and recorded before any step, root ones included, reads it. An
