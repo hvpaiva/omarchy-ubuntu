@@ -48,8 +48,9 @@ install_file 644 /usr/lib/chromium/initial_preferences <<<"$omarchy_prefs"
 
 # chromium-sandbox (the setuid helper) is a Recommends of chromium; the
 # AppArmor profile below lets the namespace sandbox work, the helper is the
-# fallback.
-if ! apt_installed chromium || ! apt_installed chromium-sandbox; then
+# fallback. --release (the updater, after a release upgrade) takes the new
+# release's build of a Chromium the upgrade left at the old one's.
+if [[ ${1:-} == --release ]] || ! apt_installed chromium || ! apt_installed chromium-sandbox; then
   log "chromium"
   apt_retry install -y --no-install-recommends chromium chromium-sandbox
 fi

@@ -334,8 +334,9 @@ mkdir -p "$applied_dir"
 # A release upgrade (24.04 to 26.04) turns every PPA and third-party source
 # off, makes sudo-rs the sudo and takes libraries away from what was built
 # here. Once per release the root steps that hold what is per release run
-# again, as a bootstrap on it would: sources and apt packages (10, 12), the
-# .debs built per release (15 --release), classic sudo (55), the sudoers rules
+# again, as a bootstrap on it would: sources and apt packages, with what came
+# from those sources moved to the new release's builds (10 and 12 --release),
+# the .debs built per release (15 --release), classic sudo (55), the sudoers rules
 # and system tweaks (57, 58, 70); then upstream's default packages the upgrade
 # removed (47) and the Install menu's .debs taken in the old release's build
 # (omarchy-pkg-ubuntu release-refresh). The tool steps below redo every build
@@ -349,7 +350,7 @@ release_was=$(cat "$applied_dir/ubuntu-release" 2>/dev/null) ||
 if [[ -n $release_was && $release_was != "$release_now" ]]; then
   step "Ubuntu $release_was to $release_now"
   echo "The port's sources, packages, sudo and system pieces follow the new release (root)."
-  for root_step in 10-apt-root 12-chromium-root "15-extra-debs-root --release" 55-root 57-system-tweaks-root 58-system-extras-root 70-browser-policy-root; do
+  for root_step in "10-apt-root --release" "12-chromium-root --release" "15-extra-debs-root --release" 55-root 57-system-tweaks-root 58-system-extras-root 70-browser-policy-root; do
     read -r script args <<<"$root_step"
     # shellcheck disable=SC2086  # the step's one option, or none
     run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/$script.sh" $args
