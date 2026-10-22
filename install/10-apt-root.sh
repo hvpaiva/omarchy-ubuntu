@@ -78,23 +78,6 @@ if [[ ${1:-} == --release ]]; then
   trap - EXIT
 fi
 
-# --release (the updater, after a release upgrade): Ubuntu's upgrade kept what
-# came from the sources it turned off at the old release's builds, and held
-# back what those link (Qt, for cppiber's portal). cppiber's noble builds sort
-# above its builds for a later release (0.5.1-1ppa3 > 0.5.1-1ppa3~1resolute1),
-# so apt would keep them: for this one full upgrade a pin above 1000 takes the
-# PPA's builds for this release, downgrades included, and the rest moves
-# along with them, as the release upgrade would have moved it with the PPA on.
-if [[ ${1:-} == --release ]]; then
-  log "packages from the sources back on, to the new release's builds"
-  realign=/etc/apt/preferences.d/omarchy-release-realign
-  trap 'rm -f "$realign"' EXIT
-  printf 'Package: *\nPin: release o=LP-PPA-cppiber-hyprland\nPin-Priority: 1001\n' >"$realign"
-  apt_retry -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold full-upgrade -y --allow-downgrades
-  rm -f "$realign"
-  trap - EXIT
-fi
-
 read_list() { grep -vE '^\s*(#|$)' "$1"; }
 mapfile -t runtime < <(read_list "$REPO_DIR/packages/apt-runtime.txt")
 mapfile -t build < <(read_list "$REPO_DIR/packages/apt-build.txt")
