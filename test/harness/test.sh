@@ -292,6 +292,54 @@ expect "S7 updater exit" 0 "$st"
 grep -q "restarting on the new copy" /tmp/s7.log && ok "S7 re-executed on the pulled copy" || ko "S7 re-executed on the pulled copy"
 expect "S7 pin from the pulled port applied" "$BASE" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
 
+echo "== S16 sudo asks once on a terminal"
+# A password for tester, and an inhibitor that needs root without refreshing
+# sudo's timestamp and drops it outside an update's session, as 4.5's does.
+echo tester:harness | sudo chpasswd
+echo 'tester ALL=(ALL) ALL' | sudo tee /etc/sudoers.d/tester >/dev/null
+sudo -k
+printf '#!/bin/bash\n[[ $1 != start ]] || /usr/bin/sudo -N /usr/bin/true\n[[ ${OMARCHY_UPDATE_SUDO_SESSION:-} == 1 ]] || /usr/bin/sudo -k\n' >"$HOME/shims/omarchy-update-stay-awake"
+# A missing helper sends the update through a root step after the inhibitor's.
+echo harness | sudo -S rm -f /usr/bin/omarchy-theme-set-browser-policy 2>/dev/null
+sudo -k
+# A terminal that answers each prompt as it comes: typed-ahead input would be
+# eaten by gum, which reads the terminal for its colours.
+cat >/tmp/answer-sudo.py <<'EOF'
+import os, pty, select, signal, sys, time
+pid, fd = pty.fork()
+if pid == 0:
+    os.execvp(sys.argv[1], sys.argv[1:])
+prompts, tail, deadline = 0, b"", time.time() + 300
+with open("/tmp/s16.typescript", "wb") as log:
+    while time.time() < deadline:
+        if not select.select([fd], [], [], 1)[0]:
+            continue
+        try:
+            data = os.read(fd, 4096)
+        except OSError:
+            break
+        if not data:
+            break
+        log.write(data)
+        tail = (tail + data)[-200:]
+        if b"password for tester" in tail:
+            prompts, tail = prompts + 1, b""
+            time.sleep(0.2)
+            os.write(fd, b"harness\n")
+    else:
+        os.kill(pid, signal.SIGKILL)
+os.close(fd)
+print(prompts)
+sys.exit(os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1]))
+EOF
+prompts=$(python3 /tmp/answer-sudo.py omarchy-update-ubuntu -y 2>/dev/null); st=$?
+expect "S16 updater exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s16.typescript
+expect "S16 one password prompt" 1 "$prompts"
+check "S16 the root step ran on that authorization" test -x /usr/bin/omarchy-theme-set-browser-policy
+echo harness | sudo -S sh -c "echo 'tester ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/tester" 2>/dev/null
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
+
 echo "== S8 dev channel"
 omarchy-channel-ubuntu set dev >/tmp/s8.log 2>&1; st=$?
 expect "S8 set dev exit" 0 "$st"
