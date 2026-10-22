@@ -97,12 +97,23 @@ if [[ -d $SRC_DIR/aether ]]; then
   rm -rf "$SRC_DIR/aether"
 fi
 
-if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION"; then
-  log "gpu-screen-recorder $GSR_VERSION (meson)"
+# gpu-screen-recorder links the FFmpeg it builds itself (ffmpeg_static: 9.0,
+# where upstream's ring carries 9.0.2). noble's 6.1 has no working
+# hybrid_fragmented movflags, so its mp4 recordings can stutter. FFmpeg 9 wants
+# Vulkan headers newer than noble's: Khronos', at the ring's version, serve
+# both builds. A build still linked to noble's FFmpeg is redone.
+if ! want "$LOCAL_BIN/gpu-screen-recorder" "$GSR_VERSION" ||
+  [[ $(ldd "$LOCAL_BIN/gpu-screen-recorder" 2>/dev/null) == *libavformat* ]]; then
+  log "gpu-screen-recorder $GSR_VERSION (meson, FFmpeg built in)"
+  git_checkout "$SRC_DIR/vulkan-headers" https://github.com/KhronosGroup/Vulkan-Headers "$VULKAN_HEADERS_VERSION"
+  printf '%s\n' "Name: Vulkan-Headers" "Description: Vulkan headers" "Version: ${VULKAN_HEADERS_VERSION#v}" \
+    "Cflags: -I$SRC_DIR/vulkan-headers/include" >"$SRC_DIR/vulkan-headers/vulkan.pc"
   git_checkout "$SRC_DIR/gpu-screen-recorder" https://repo.dec05eba.com/gpu-screen-recorder "$GSR_VERSION"
   rm -rf "$SRC_DIR/gpu-screen-recorder/build"
-  quietly meson setup "$SRC_DIR/gpu-screen-recorder/build" "$SRC_DIR/gpu-screen-recorder" --buildtype=release \
-    --prefix="$OMARCHY_HOME/.local" -Dcapabilities=false -Dsystemd=false -Dnvidia_suspend_fix=false
+  quietly env PKG_CONFIG_PATH="$SRC_DIR/vulkan-headers:$PKG_CONFIG_PATH" \
+    meson setup "$SRC_DIR/gpu-screen-recorder/build" "$SRC_DIR/gpu-screen-recorder" --buildtype=release \
+    --prefix="$OMARCHY_HOME/.local" -Dcapabilities=false -Dsystemd=false -Dnvidia_suspend_fix=false \
+    -Dffmpeg_static=true -Dc_args="-I$SRC_DIR/vulkan-headers/include"
   quietly ninja -C "$SRC_DIR/gpu-screen-recorder/build"
   quietly meson install -C "$SRC_DIR/gpu-screen-recorder/build"
   note "gsr-kms-server gets cap_sys_admin in install/55-root.sh"

@@ -358,6 +358,7 @@ declare -A ring_package=(
 declare -A mirror_package=(
   [QT]=qt6-base [GUM]=gum [FASTFETCH]=fastfetch [GHOSTTY]=ghostty [MISE]=mise [HYPRPICKER]=hyprpicker [XDG_TERMINAL_EXEC]=xdg-terminal-exec
   [GSR]=gpu-screen-recorder [GTK4_LAYER_SHELL]=gtk4-layer-shell [NERD_FONTS]=ttf-jetbrains-mono-nerd
+  [VULKAN_HEADERS]=vulkan-headers
 )
 matched=0
 compare_pins() { # compare_pins <what> <url> <map name>
@@ -378,10 +379,13 @@ compare_pins() { # compare_pins <what> <url> <map name>
     pin_var=${var}_VERSION
     pin=${!pin_var#v}
     theirs=$(awk -F'\t' -v n="$name" '$1 == n { print $2; exit }' "$work/$what.tsv")
+    # An epoch (1:) is pacman's, not the project's.
+    theirs=${theirs#*:}
     if [[ -z $theirs ]]; then
       echo "- \`$name\`: port $pin, not in the $what"
-    # A commit pinned here is spelled by pacman as <version>.r<n>.g<short hash>.
-    elif [[ $pin != "$theirs" && $theirs != *.g"${pin:0:7}" ]]; then
+    # A commit pinned here is spelled by pacman as <version>.r<n>.g<short hash>,
+    # and a tag x.y.z of a project numbered in fours (Khronos') as x.y.z.0.
+    elif [[ $pin != "$theirs" && $pin.0 != "$theirs" && $theirs != *.g"${pin:0:7}" ]]; then
       echo "- \`$name\`: **port $pin, $what $theirs**"
       problem versions "$name $pin -> $theirs ($what)"
     else
