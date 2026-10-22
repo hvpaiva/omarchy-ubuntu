@@ -123,7 +123,7 @@ EOF
     -Dffmpeg_static=true -Dc_args="-I$SRC_DIR/vulkan-headers/include"
   quietly ninja -C "$SRC_DIR/gpu-screen-recorder/build"
   quietly meson install -C "$SRC_DIR/gpu-screen-recorder/build"
-  note "gsr-kms-server gets cap_sys_admin in install/55-root.sh"
+  note "gsr-kms-server moves to /usr/local/bin with cap_sys_admin in install/55-root.sh"
 fi
 
 # The companion apps upstream's base lists at this tag, from source, less the

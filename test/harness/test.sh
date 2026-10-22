@@ -425,6 +425,13 @@ expect "S14 refused" 1 "$st"
 grep -q "switch with: omarchy-channel-set rc" /tmp/s14.log && ok "S14 points at omarchy-channel-set" || { ko "S14 points at omarchy-channel-set"; tail -3 /tmp/s14.log; }
 expect "S14 channel untouched" stable "$(cat "$HOME/.local/state/omarchy/channel")"
 
+echo "== S21 the screen recorder's KMS server goes to root, with its capability"
+cp /usr/bin/true "$HOME/.local/bin/gsr-kms-server"
+omarchy-update-ubuntu -y >/tmp/s21.log 2>&1 || onfail /tmp/s21.log
+expect "S21 root's, in /usr/local/bin" "root 755" "$(stat -c '%U %a' /usr/local/bin/gsr-kms-server 2>/dev/null)"
+expect "S21 with cap_sys_admin" "cap_sys_admin=ep" "$(getcap /usr/local/bin/gsr-kms-server 2>/dev/null | awk '{print $NF}')"
+check "S21 none left in ~/.local/bin" test ! -e "$HOME/.local/bin/gsr-kms-server"
+
 echo "== S19 removed preinstalls stay out of the steps"
 common() { (cd "$PORT" && REPO_DIR=$PORT bash -c "source lib/common.sh; $1") 2>/dev/null | tr '\n' ' ' | sed 's/ $//'; }
 expect "S19 nothing removed without the marker" "" "$(common removed_preinstalls)"
@@ -435,6 +442,22 @@ removed=$(common removed_preinstalls)
 apps_after=$(common base_apps)
 [[ " $apps_before " == *" omacalc "* && " $apps_after " != *" omacalc "* ]] && ok "S19 a removed companion app is not rebuilt" || ko "S19 a removed companion app is not rebuilt ($apps_before -> $apps_after)"
 rm -f "$HOME/.local/state/omarchy/preinstalls-removed"
+
+echo "== S20 Intel's media stack: due at an update on the xe driver, unless declined"
+due() { (cd "$PORT" && env REPO_DIR="$PORT" "$@" ./install/13-intel-media-root.sh --due) >/dev/null 2>&1; echo $?; }
+# The container sees the host's PCI devices.
+xe=1
+for dev in /sys/bus/pci/drivers/xe/0000:*; do [[ $(cat "$dev/vendor" 2>/dev/null) == 0x8086 ]] && xe=0; done
+expect "S20 due only on an Intel GPU on xe" "$xe" "$(due)"
+expect "S20 due when OMARCHY_INTEL_MEDIA=1 asks" 0 "$(due OMARCHY_INTEL_MEDIA=1)"
+expect "S20 never due with OMARCHY_INTEL_MEDIA=0" 1 "$(due OMARCHY_INTEL_MEDIA=0)"
+sudo touch /etc/apt/preferences.d/omarchy-intel-graphics-media
+expect "S20 not due once the pin is in place" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
+sudo rm -f /etc/apt/preferences.d/omarchy-intel-graphics-media
+(cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester OMARCHY_INTEL_MEDIA=0 ./install/13-intel-media-root.sh) >/tmp/s20.log 2>&1 || { ko "S20 the step with OMARCHY_INTEL_MEDIA=0"; onfail /tmp/s20.log; }
+check "S20 declining leaves the user's marker" test -O "$PORT/.applied/13-intel-media-declined"
+expect "S20 not due once declined" 1 "$(due OMARCHY_INTEL_MEDIA=1)"
+rm -f "$PORT/.applied/13-intel-media-declined"
 
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
