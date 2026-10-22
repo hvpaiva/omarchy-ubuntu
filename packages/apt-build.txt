@@ -1,6 +1,7 @@
 # Build dependencies for everything compiled from source (Quickshell, tensaku,
 # ttfx, the Qt Quick apps, cliamp, herdr, the share picker,
-# gpu-screen-recorder, gtk4-layer-shell, xdg-terminal-exec, hyprpicker).
+# gpu-screen-recorder, gtk4-layer-shell, xdg-terminal-exec, hyprpicker,
+# WirePlumber).
 
 build-essential
 cmake
@@ -45,6 +46,13 @@ libxcomposite-dev
 libxdamage-dev
 libxfixes-dev
 libxrandr-dev
+
+# WirePlumber (noble's is 0.4)
+libpipewire-0.3-dev
+libglib2.0-dev
+liblua5.4-dev
+libsystemd-dev
+systemd-dev
 
 # cliamp (Go audio bindings)
 libasound2-dev

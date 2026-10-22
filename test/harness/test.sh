@@ -558,18 +558,24 @@ check "R3 no record: the release Quickshell was built for counts" grep -q -- '15
 rm -f "$HOME/.local/bin/quickshell" "$r3_log"
 git -C "$PORT" checkout -q -- install/
 
-echo "== S22 WirePlumber 0.4's drop-in: put in place by the updater, gone with 0.5"
-dropin=$HOME/.config/systemd/user/wireplumber.service.d/10-omarchy-filter-chains.conf
-printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber 0.4.17"\n' >"$HOME/shims/wireplumber"
-chmod +x "$HOME/shims/wireplumber"
-rm -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service" "$dropin"
+echo "== S22 WirePlumber's drop-ins follow the WirePlumber on the machine"
+wp_dir=$HOME/.config/systemd/user/wireplumber.service.d
+fake_wp() { printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber %s"\n' "$2" >"$HOME/fake-wireplumber" && sudo install -m 755 "$HOME/fake-wireplumber" "$1"; }
+units() { (cd "$PORT" && REPO_DIR=$PORT ./install/46-audio-denoise.sh --units) >/tmp/s22b.log 2>&1 || onfail /tmp/s22b.log; }
+dropins() { (cd "$wp_dir" 2>/dev/null && ls) | tr '\n' ' ' | sed 's/ $//'; }
+fake_wp /usr/bin/wireplumber 0.4.17
+rm -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service" "$wp_dir"/*.conf
 omarchy-update-ubuntu -y >/tmp/s22.log 2>&1 || onfail /tmp/s22.log
-check "S22 the denoise unit is in place" test -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service"
-check "S22 the drop-in is in place with 0.4" cmp -s "$PORT/config/systemd/user/wireplumber.service.d/10-omarchy-filter-chains.conf" "$dropin"
-printf '#!/bin/bash\necho wireplumber\necho "Compiled with libwireplumber 0.5.18"\n' >"$HOME/shims/wireplumber"
-(cd "$PORT" && REPO_DIR=$PORT ./install/46-audio-denoise.sh --units) >/tmp/s22b.log 2>&1 || onfail /tmp/s22b.log
-check "S22 the drop-in goes with 0.5" test ! -e "$dropin"
-rm -f "$HOME/shims/wireplumber"
+check "S22 the updater puts the denoise unit in place" test -f "$HOME/.config/systemd/user/omarchy-audio-input-denoise.service"
+expect "S22 noble's 0.4 alone: the filter-chain drop-in" 10-omarchy-filter-chains.conf "$(dropins)"
+fake_wp /usr/local/bin/wireplumber 0.5.18
+units
+expect "S22 0.5 built beside it: the drop-in that runs it" 20-omarchy-wireplumber-0.5.conf "$(dropins)"
+fake_wp /usr/bin/wireplumber 0.5.12
+units
+expect "S22 a release that packages 0.5: neither" "" "$(dropins)"
+sudo rm -f /usr/bin/wireplumber /usr/local/bin/wireplumber
+rm -f "$HOME/fake-wireplumber"
 
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
