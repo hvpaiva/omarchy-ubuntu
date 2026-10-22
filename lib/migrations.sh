@@ -13,7 +13,7 @@
 OMARCHY_MIGRATIONS_ARCH_ONLY=(
   1787666837.sh # Dell XPS 13 sidecar amps: a skip recipe, and dell-xps13-sidecar-amps-apply does not exist here; noble's kernel drives the speakers
   1788279117.sh # YT6801 DKMS driver retirement through pacman -Qq; the port never installed it, Ubuntu's kernel drives the NIC
-  1788862626.sh # Elgato Cam Link 4K relay: noble's v4l2loopback-ctl 0.12 cannot add the device; not ported (issue #12)
+  1788862626.sh # Elgato Cam Link 4K relay: the port's migration 1792636073-camlink-4k runs it once noble has what it needs (v4l2loopback 0.12 cannot add the device at runtime, v4l2-relayd 0.1.2 has no per-camera template)
   1788996284.sh # repairs omarchy-nvim's clipboard provider through pacman; the port has no omarchy-nvim package
   1790917620.sh # N1x: reorders /etc/pacman.conf; no pacman and no aarch64 here
   1790953795.sh # ASUS ProArt P14 N1x: a Limine command-line drop-in and limine-mkinitcpio
