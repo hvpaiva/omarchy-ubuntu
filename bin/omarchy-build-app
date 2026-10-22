@@ -183,6 +183,8 @@ build_signed() {
   pkg-config --exists poppler-qt6 libqpdf || die "signed: poppler-qt6 or libqpdf is missing, run $REPO_DIR/bootstrap.sh 10"
   (
     trap 'git -C "$dir" checkout --quiet -- src/stamper.cpp src/signer.cpp' EXIT
+    # A build cut short without its trap leaves the adjustments applied.
+    git -C "$dir" checkout --quiet -- src/stamper.cpp src/signer.cpp
     if ! pkg-config --atleast-version=12 libqpdf; then
       sed -i 's/^    const auto rotate = page.getAttribute(/    auto rotate = page.getAttribute(/' "$dir/src/stamper.cpp"
       grep -q '^    auto rotate = page.getAttribute(' "$dir/src/stamper.cpp" ||
