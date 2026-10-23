@@ -6,8 +6,9 @@
 # command Omarchy's bash init runs). Those wrappers go, matched byte for byte
 # against what the writer produced, in upstream's form or the port's (patch
 # mise-wrappers); one the user edited stays. helix's, whose command is not the
-# tool's binary, becomes the recipe's launcher while mise has helix. The line
-# a wrapper wrote in config.toml stays: it may be the user's own.
+# tool's binary, becomes the recipe's launcher while helix is declared and
+# installed. The line a wrapper wrote in config.toml stays: it may be the
+# user's own.
 
 # shellcheck disable=SC1003,SC2016  # the writer's text, its quoting included
 wrapper_template() { # <form: upstream|port> <package> <bin>, quoted as the writer did since 4.0.4
@@ -46,7 +47,8 @@ retire() { # <command> <package> [bin]
   local command=$1 package=$2 bin=${3:-$1}
   recipe_wrapper "$command" "$package" "$bin" || return 0
   rm -f "$HOME/.local/bin/$command"
-  if [[ $command != "$bin" ]] && command -v mise >/dev/null && mise where "$package" >/dev/null 2>&1; then
+  if [[ $command != "$bin" ]] && command -v mise >/dev/null &&
+    mise ls --json "$package" 2>/dev/null | jq -e 'any(.[]; .active)' >/dev/null; then
     printf '#!/bin/sh\nexec %s "$@"\n' "$bin" >"$HOME/.local/bin/$command"
     chmod 755 "$HOME/.local/bin/$command"
   fi
@@ -64,5 +66,5 @@ retire dua dua
 
 if (( ${#removed[@]} )); then
   echo "Removed the mise wrappers that put their tool back at every start: ${removed[*]}."
-  echo "A 'tool = \"latest\"' line they wrote in ~/.config/mise/config.toml stays; take it out there to drop the tool."
+  echo "A 'tool = \"latest\"' line they wrote in ~/.config/mise/config.toml stays; to drop a tool, take its line out there, then run: mise uninstall --all <tool>"
 fi

@@ -165,6 +165,9 @@ instructions if it finds a rebase that an earlier updater left in progress.
 
 ### Upgrading Ubuntu (24.04 to 26.04)
 
+Run `omarchy-update-ubuntu` right before the upgrade: each update records
+what dpkg has installed (`.applied/dpkg-packages`), and after the upgrade
+only upstream's default packages that were on that record come back.
 Ubuntu's own upgrade (`do-release-upgrade`, or Software Updater) is the way:
 it asks before it goes on with the packages that come from outside Ubuntu's
 archive (Hyprland from its PPA, Chromium, the `.deb` tools), turns every PPA
@@ -178,7 +181,8 @@ of its own. It sees the new release
 (`.applied/ubuntu-release`) and runs once what a bootstrap on it would: the
 sources at the new release and the apt packages from them, the `.deb` tools
 built per release, the sudoers rules and system tweaks,
-upstream's default packages the upgrade removed, and the Install menu's
+upstream's default packages the upgrade removed (the ones the record had),
+and the Install menu's
 `.deb`s built per release (Sunshine, umu-launcher) in the new release's build.
 Then every build that lost a library to the upgrade (the companion apps,
 Quickshell, the tools) is rebuilt, and SDDM with Omarchy's theme is set up to

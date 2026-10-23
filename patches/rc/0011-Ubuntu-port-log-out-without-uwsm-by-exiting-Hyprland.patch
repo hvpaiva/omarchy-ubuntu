@@ -1,4 +1,4 @@
-From 39113e6eb71171ffdb3d8c14897167a6a7dc1f63 Mon Sep 17 00:00:00 2001
+From 1286bba8fc3978c686edbd8ff4ea80cb236170fb Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Wed, 21 Oct 2026 11:04:57 -0300
 Subject: [PATCH 11/12] Ubuntu port: log out without uwsm by exiting Hyprland

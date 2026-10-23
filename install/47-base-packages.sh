@@ -15,11 +15,14 @@ mode=${1:-}
 
 # What dpkg has installed. Written at each update on an unchanged release and
 # at the end of a bootstrap, it is what the machine had before the next
-# release upgrade.
+# release upgrade. binary:Package qualifies a Multi-Arch: same package with
+# the native architecture too, which the names dpkg-names gives lack; a
+# foreign one keeps its own (:i386).
 snapshot=$REPO_DIR/.applied/dpkg-packages
 write_snapshot() {
   install -d "$REPO_DIR/.applied"
-  dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' | awk '$1 ~ /^.i/ { print $2 }' | LC_ALL=C sort >"$snapshot"
+  dpkg-query -W -f='${db:Status-Abbrev} ${binary:Package}\n' |
+    awk -v native=":$(dpkg --print-architecture)" '$1 ~ /^.i/ { sub(native "$", "", $2); print $2 }' | LC_ALL=C sort >"$snapshot"
 }
 if [[ $mode == --snapshot ]]; then
   write_snapshot
@@ -83,7 +86,13 @@ if ! "$resolver" add "${missing[@]}"; then
     "$resolver" installed "$name" >/dev/null 2>&1 || "$resolver" add "$name" || failed+=("$name")
   done
   if (( ${#failed[@]} > 0 )); then
-    warn "not installed: ${failed[*]} (the errors above say why); $REPO_DIR/bootstrap.sh 47 tries again"
+    # A whole run would bring back what the user removed, and the next update
+    # does not run this again.
+    if [[ $mode == --release ]]; then
+      warn "not installed: ${failed[*]} (the errors above say why); omarchy-pkg-add ${failed[*]} once the cause is fixed"
+    else
+      warn "not installed: ${failed[*]} (the errors above say why); $REPO_DIR/bootstrap.sh 47 tries again"
+    fi
   fi
 fi
 [[ $mode == --release ]] || write_snapshot

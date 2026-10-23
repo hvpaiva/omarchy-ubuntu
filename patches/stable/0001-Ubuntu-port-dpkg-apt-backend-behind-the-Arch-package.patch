@@ -1,4 +1,4 @@
-From cf3bf57189b6d1523cb0f93ce140daa11ea3ead1 Mon Sep 17 00:00:00 2001
+From b4356384e6e7a344082579e0617c663548c8e88a Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/13] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |    3 +
  bin/omarchy-pkg-present         |    3 +
  bin/omarchy-pkg-remove          |    3 +
- bin/omarchy-pkg-ubuntu          | 1127 +++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 1155 +++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |   13 +-
- 12 files changed, 1189 insertions(+), 1 deletion(-)
+ 12 files changed, 1217 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,10 +185,10 @@ index 486d3772..960ae735 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..fea1f85f
+index 00000000..34f15128
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,1127 @@
+@@ -0,0 +1,1155 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
@@ -766,9 +766,35 @@ index 00000000..fea1f85f
 +mise_port_config=$HOME/.config/mise/conf.d/omarchy-ubuntu.toml
 +
 +# A command Arch's package names otherwise than the tool's binary (helix, for
-+# hx) runs the shim through a launcher.
++# hx) runs the shim through a launcher, there while the tool is.
 +mise_launcher() { # <bin>
 +  printf '#!/bin/sh\nexec %s "$@"\n' "$1"
++}
++
++# Declared and installed. mise where answers for an install no config asks
++# for any more, whose shim then fails in every shell.
++mise_active() {
++  mise ls --json "$1" 2>/dev/null | jq -e 'any(.[]; .active)' >/dev/null
++}
++
++# A copy that is not mise's counts as well (Ubuntu's, a vendor's, cargo's, a
++# wrapper of the user's): what is here already is left as it is. An
++# executable by that name on PATH outside mise's shims and installs, the
++# recipe's own launcher aside.
++mise_elsewhere() { # <command> <bin>
++  local data=${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise} name path
++  local -a names=("$1")
++  [[ $2 == "$1" ]] || names+=("$2")
++  for name in "${names[@]}"; do
++    while IFS= read -r path; do
++      case $path in
++      "$data"/shims/* | "$data"/installs/*) continue ;;
++      esac
++      [[ $path == "$HOME/.local/bin/$1" ]] && cmp -s "$path" <(mise_launcher "$2") && continue
++      return 0
++    done < <(type -aP -- "$name")
++  done
++  return 1
 +}
 +
 +install_mise() {
@@ -776,28 +802,30 @@ index 00000000..fea1f85f
 +  mkdir -p "${mise_port_config%/*}" &&
 +    MISE_MINIMUM_RELEASE_AGE=0 mise use --path "$mise_port_config" --quiet "$tool" &&
 +    mise reshim || return 1
-+  if [[ $command != "$bin" ]]; then
-+    mkdir -p "$HOME/.local/bin" && mise_launcher "$bin" >"$HOME/.local/bin/$command" && chmod 755 "$HOME/.local/bin/$command"
++  # rm first: a dotfiles link in its place keeps its target.
++  if [[ $command != "$bin" ]] && mise_active "$tool"; then
++    mkdir -p "$HOME/.local/bin" && rm -f "$HOME/.local/bin/$command" &&
++      mise_launcher "$bin" >"$HOME/.local/bin/$command" && chmod 755 "$HOME/.local/bin/$command"
 +  fi
 +}
 +
 +# The tool leaves the port's file, and stays installed while another config
-+# (the user's) still declares it, which is said.
++# (the user's) still declares it, which is said, with the way to drop it.
 +remove_mise() {
 +  local tool=$1 command=$2 bin=${3:-$2} declared
 +  if [[ -f $mise_port_config ]]; then
 +    mise use --path "$mise_port_config" --remove "$tool" &>/dev/null
 +  fi
-+  if [[ $command != "$bin" ]] && cmp -s "$HOME/.local/bin/$command" <(mise_launcher "$bin"); then
-+    rm -f "$HOME/.local/bin/$command"
-+  fi
 +  declared=$(mise ls --json "$tool" 2>/dev/null | jq -r '.[].source.path // empty' | sort -u)
 +  if [[ -n $declared ]]; then
-+    echo "$tool stays installed: still declared in $(paste -sd' ' <<<"$declared")"
++    echo "$tool stays installed, still declared in $(paste -sd' ' <<<"$declared"): take it out there, then run mise uninstall --all $tool"
 +  else
 +    mise uninstall --all "$tool" &>/dev/null
 +  fi
 +  mise reshim
++  if [[ $command != "$bin" ]] && ! mise_active "$tool" && cmp -s "$HOME/.local/bin/$command" <(mise_launcher "$bin"); then
++    rm -f "$HOME/.local/bin/$command"
++  fi
 +}
 +
 +nerdfont_dir() {
@@ -1060,7 +1088,7 @@ index 00000000..fea1f85f
 +  pool | deb) dpkg_installed "$1" ;;
 +  opr) [[ -s $(opr_manifest "$1") ]] ;;
 +  flatpak) flatpak info -- "$1" &>/dev/null ;;
-+  mise) mise where "$1" &>/dev/null ;;
++  mise) mise_active "$1" || mise_elsewhere "$2" "${3:-$2}" ;;
 +  nerdfont) fc-list : family | grep -iE "^$2[^,]* Nerd Font" >/dev/null ;;
 +  i386) dpkg_installed "$1:i386" ;;
 +  custom) "installed_custom_${1//-/_}" ;;
