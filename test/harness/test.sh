@@ -733,7 +733,12 @@ getent passwd sddm >/dev/null || sudo useradd --system --home-dir /var/lib/sddm 
 fake_deb sddm 0.21.0+git20250502.4fe234b-2ubuntu3 /etc/pam.d/sddm $'@include common-auth\n-auth   optional        pam_gnome_keyring.so\n-session optional       pam_gnome_keyring.so auto_start'
 fake_deb qt6-wayland 6.10.2-4
 expect "S24 26.04's 0.21 on GDM: due" 0 "$(due66)"
+# Ubuntu's fingerprint login, as pam-auth-update's fprintd profile writes it.
+sudo cp /etc/pam.d/common-auth /tmp/common-auth.saved
+printf 'auth\t[success=2 default=ignore]\tpam_fprintd.so max-tries=1 timeout=10 # debug\n' | sudo tee -a /etc/pam.d/common-auth >/dev/null
 step66
+sudo cp /tmp/common-auth.saved /etc/pam.d/common-auth
+check "S24 the switch says a password login waits for the fingerprint first" grep -q 'waits for a fingerprint first' /tmp/s24.log
 expect "S24 SDDM is the display manager" /usr/bin/sddm "$(dm)"
 expect "S24 display-manager.service is SDDM's" /lib/systemd/system/sddm.service "$(readlink /etc/systemd/system/display-manager.service)"
 expect "S24 debconf's answer follows" sddm "$(sudo debconf-show sddm | awk -F': ' '/default-x-display-manager/ {print $2}')"
@@ -770,6 +775,7 @@ step66
 expect "S24 a plain run takes SDDM again" /usr/bin/sddm "$(dm)"
 check "S24 and drops the decline" test ! -e "$PORT/.applied/66-sddm-declined"
 check "S24 no automatic login where GDM has none" test ! -e /etc/sddm.conf.d/autologin.conf
+check "S24 and no fingerprint note without Ubuntu's fingerprint login" sh -c '! grep -q "waits for a fingerprint" /tmp/s24.log'
 # The updater on a machine set up before the step had SDDM: due, once.
 step66 --undo
 rm -f "$PORT/.applied/66-sddm-declined" "$PORT/.applied/66-sddm.sha256"
