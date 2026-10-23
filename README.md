@@ -137,6 +137,11 @@ port's own migrations (`migrations/`), upstream's new ones (`lib/migrations.sh`
 names the Arch-only ones it marks done instead), the post-update hooks, and the
 shell restarts. `-y` asks nothing, as upstream's `omarchy-update -y`.
 
+The branch is rebuilt when the channel's ref or the series changed since its
+last build, a patch reworked in place included: each build notes a hash of
+the series in the checkout's git config (`branch.ubuntu.omarchy-ubuntu-series`).
+A checkout an older port built has no note and is rebuilt once.
+
 **From a port cloned before 2026-10-22**, this repository cannot
 fast-forward: its history was rewritten that day, and `omarchy-update-ubuntu`
 ends saying the port itself was not updated. Bring it to main once, then

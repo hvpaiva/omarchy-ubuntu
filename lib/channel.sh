@@ -135,6 +135,28 @@ channel_branch_scan() {
   return 1
 }
 
+# series_fingerprint <series dir>: one hash over what a build takes from the
+# series, the base tag and each patch by name and content. A patch reworked in
+# place keeps its subject, which is all channel_branch_scan sees.
+series_fingerprint() {
+  (cd -- "$1" && sha256sum -- base *.patch) | sha256sum | cut -d' ' -f1
+}
+
+# channel_branch_record <git dir> <branch> <series dir>: notes the series as
+# the one the branch was built from. The note is in the checkout's own config,
+# under the branch: it goes wherever the checkout goes, and git deletes it
+# with the branch.
+channel_branch_record() {
+  git -C "$1" config --local "branch.$2.omarchy-ubuntu-series" "$(series_fingerprint "$3")"
+}
+
+# channel_branch_built_from <git dir> <branch> <series dir>: whether the
+# branch was last built from the series as it is now; never for one built
+# before the note existed.
+channel_branch_built_from() {
+  [[ $(git -C "$1" config --local --get "branch.$2.omarchy-ubuntu-series") == "$(series_fingerprint "$3")" ]]
+}
+
 # upstream_default_branch <git dir>: what origin/HEAD points at (`git remote
 # set-head origin --auto` keeps it current); master when it was never set.
 upstream_default_branch() {

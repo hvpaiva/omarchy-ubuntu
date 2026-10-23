@@ -102,6 +102,8 @@ expect "S1 channel file" stable "$(cat "$HOME/.local/state/omarchy/channel" 2>/d
 expect "S1 branch" ubuntu "$(git -C "$OMARCHY_PATH" branch --show-current)"
 expect "S1 base tag" "$BASE" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
 expect "S1 patches on top" 13 "$(git -C "$OMARCHY_PATH" rev-list --count "$BASE..ubuntu")"
+stable_series=$(PORT_DIR=$PORT bash -c 'source "$PORT_DIR/lib/channel.sh" && series_fingerprint "$PORT_DIR/patches/stable"' 2>/dev/null)
+expect "S1 the branch notes the series it was built from" "$stable_series" "$(git -C "$OMARCHY_PATH" config --get branch.ubuntu.omarchy-ubuntu-series || echo none)"
 expect "S1 bootstrap 30 is idempotent" 0 "$( (cd "$PORT" && REPO_DIR=$PORT ./bootstrap.sh 30) >/dev/null 2>&1; echo $?)"
 (cd "$PORT" && REPO_DIR=$PORT ./bootstrap.sh 80) >/dev/null 2>&1
 
@@ -437,6 +439,29 @@ git -C "$PORT" revert --no-edit HEAD >/dev/null && git -C "$PORT" push -q origin
 expect "S13 series back to 13 files" 13 "$(ls "$PORT"/patches/stable/*.patch | wc -l)"
 omarchy-update-ubuntu -y >/tmp/s13b.log 2>&1 || onfail /tmp/s13b.log
 expect "S13 series restored" 13 "$(git -C "$OMARCHY_PATH" rev-list --count "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)..ubuntu")"
+
+echo "== S26 a patch reworked in place, under the same subject"
+rebuilt() { grep -q "Rebuilding ubuntu" "$1"; }
+left() { grep -q "already at" "$1" && ! rebuilt "$1"; }
+sed -i 's/^+# Ubuntu port: everything below is pacman\./+# Ubuntu port: everything below is pacman (reworked)./' "$PORT"/patches/stable/0002-*.patch
+git -C "$PORT" commit -qam "series: rework 0002 in place" && git -C "$PORT" push -q origin HEAD:main
+omarchy-update-ubuntu -y >/tmp/s26.log 2>&1; st=$?
+expect "S26 updater exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s26.log
+check "S26 the branch is rebuilt" rebuilt /tmp/s26.log
+check "S26 the checkout has the reworked patch" grep -q 'everything below is pacman (reworked)' "$OMARCHY_PATH/bin/omarchy-update"
+omarchy-update-ubuntu -y >/tmp/s26b.log 2>&1 || onfail /tmp/s26b.log
+check "S26 the next update leaves it" left /tmp/s26b.log
+# A branch an older port built, which noted nothing.
+git -C "$OMARCHY_PATH" config --unset branch.ubuntu.omarchy-ubuntu-series
+omarchy-update-ubuntu -y >/tmp/s26c.log 2>&1 || onfail /tmp/s26c.log
+check "S26 a branch without the note is rebuilt" rebuilt /tmp/s26c.log
+omarchy-update-ubuntu -y >/tmp/s26d.log 2>&1 || onfail /tmp/s26d.log
+check "S26 once" left /tmp/s26d.log
+git -C "$PORT" revert --no-edit HEAD >/dev/null && git -C "$PORT" push -q origin HEAD:main
+omarchy-update-ubuntu -y >/tmp/s26e.log 2>&1 || onfail /tmp/s26e.log
+check "S26 the patch reverted: rebuilt again" rebuilt /tmp/s26e.log
+check "S26 and the checkout has it as it was" sh -c "grep -q 'everything below is pacman\.' '$OMARCHY_PATH/bin/omarchy-update' && ! grep -q 'pacman (reworked)' '$OMARCHY_PATH/bin/omarchy-update'"
 
 echo "== S9 upstream-check inside the container"
 out=$(cd /tmp && omarchy-upstream-check --channel stable --target "$NEXT" 2>&1); st=$?
