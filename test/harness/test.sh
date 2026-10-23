@@ -607,34 +607,44 @@ sudo rm -f /usr/bin/wireplumber /usr/local/bin/wireplumber
 rm -f "$HOME/fake-wireplumber" "$HOME/s22.systemctl"
 printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/systemctl"
 
-echo "== S25 the denoise capture lingers, so WirePlumber 0.5 waits for its microphone"
+echo "== S25 the denoise capture: no dont-fallback, which WirePlumber 0.5 destroys it for"
 fragment=$HOME/.config/pipewire/omarchy-audio-input-denoise.conf.d/90-denoise.conf
 denoise_migration=$PORT/migrations/1792714753-denoise-linger.sh
-# A session where the microphone and the denoise source are both up.
-printf '#!/bin/bash\n[[ "$1 $2" == "list sources" ]] && printf "1\\talsa_input.test\\n2\\tomarchy_denoise_source\\n"\nexit 0\n' >"$HOME/shims/pactl"
+s25_log=$HOME/s25.systemctl
+# A session with two microphones, the filtered one second, and the denoise
+# source up as the default.
+printf '#!/bin/bash\ncase "$1 $2" in\n  "list sources") printf "1\\talsa_input.first\\n2\\talsa_input.test\\n3\\tomarchy_denoise_source\\n" ;;\n  "get-default-source "*) echo omarchy_denoise_source ;;\nesac\nexit 0\n' >"$HOME/shims/pactl"
 chmod +x "$HOME/shims/pactl"
-printf '#!/bin/bash\necho "$*" >>"$HOME/s25.systemctl"\n' >"$HOME/shims/systemctl"
+denoise_unit() { # denoise_unit <what is-enabled answers; nothing for a user systemd out of reach>
+  printf '#!/bin/bash\necho "$*" >>"%s"\nif [[ $* == *is-enabled* ]]; then\n  [[ -z "%s" ]] || echo "%s"\n  [[ "%s" == enabled ]]; exit\nfi\nexit 0\n' "$s25_log" "$1" "$1" "$1" >"$HOME/shims/systemctl"
+}
+old_denoise_config() { # the config as the command wrote it before, with node.dont-fallback
+  mkdir -p "$(dirname "$fragment")"
+  printf 'context.modules = [\n  { name = libpipewire-module-filter-chain\n    args = {\n      capture.props = {\n        node.name         = "omarchy_denoise_capture"\n        node.passive      = true\n        target.object     = "alsa_input.test"\n        node.dont-fallback = true\n      }\n    }\n  }\n]\n' >"$fragment"
+}
+denoise_migration_status() { (OMARCHY_PATH=$OMARCHY_PATH PORT_DIR=$PORT bash -euo pipefail "$denoise_migration") >/tmp/s25b.log 2>&1; echo $?; }
 mkdir -p "$HOME/.local/lib/ladspa" && touch "$HOME/.local/lib/ladspa/libdeep_filter_ladspa.so"
-: >"$HOME/s25.systemctl"
+denoise_unit enabled
+: >"$s25_log"
 omarchy-audio-input-denoise on alsa_input.test >/tmp/s25.log 2>&1 || onfail /tmp/s25.log
-check "S25 the capture lingers" grep -qx ' *node.linger *= true' "$fragment"
-check "S25 on a running host, the host starts again on the config" grep -qx -- '--user restart omarchy-audio-input-denoise.service' "$HOME/s25.systemctl"
-# What the command wrote before, and the migration that rewrites it where the denoise is on.
-sed -i '/node\.linger/d' "$fragment"
-: >"$HOME/s25.systemctl"
-(OMARCHY_PATH=$OMARCHY_PATH PORT_DIR=$PORT bash -euo pipefail "$denoise_migration") >/tmp/s25b.log 2>&1; st=$?
-expect "S25 the migration" 0 "$st"
-[[ $st == 0 ]] || onfail /tmp/s25b.log
-check "S25 the old config lingers now" grep -qx ' *node.linger *= true' "$fragment"
-expect "S25 for the same microphone" 'alsa_input.test' "$(sed -n 's/.*target\.object *= *"\([^"]*\)".*/\1/p' "$fragment")"
-check "S25 and the host started again" grep -qx -- '--user restart omarchy-audio-input-denoise.service' "$HOME/s25.systemctl"
-sed -i '/node\.linger/d' "$fragment"
-printf '#!/bin/bash\necho "$*" >>"$HOME/s25.systemctl"\n[[ $* == *is-enabled* ]] && exit 1\nexit 0\n' >"$HOME/shims/systemctl"
-: >"$HOME/s25.systemctl"
-(OMARCHY_PATH=$OMARCHY_PATH PORT_DIR=$PORT bash -euo pipefail "$denoise_migration") >/tmp/s25c.log 2>&1 || onfail /tmp/s25c.log
-check "S25 with the denoise off, nothing is turned on" sh -c "! grep -q restart '$HOME/s25.systemctl' && ! grep -q 'node.linger' '$fragment'"
+check "S25 the capture has no dont-fallback" sh -c "! grep -q 'node.dont-fallback' '$fragment'"
+check "S25 and lingers where there is no microphone at all" grep -qx ' *node.linger *= true' "$fragment"
+check "S25 on a running host, the host starts again on the config" grep -qx -- '--user restart omarchy-audio-input-denoise.service' "$s25_log"
+old_denoise_config
+: >"$s25_log"
+expect "S25 the migration, the denoise on" 0 "$(denoise_migration_status)"
+check "S25 the old config written anew" sh -c "! grep -q 'node.dont-fallback' '$fragment' && grep -qx ' *node.linger *= true' '$fragment'"
+expect "S25 for the microphone it filtered, not the first one" alsa_input.test "$(sed -n 's/.*target\.object *= *"\([^"]*\)".*/\1/p' "$fragment")"
+check "S25 and the host started again" grep -qx -- '--user restart omarchy-audio-input-denoise.service' "$s25_log"
+old_denoise_config
+denoise_unit disabled
+: >"$s25_log"
+expect "S25 the migration, the denoise off" 0 "$(denoise_migration_status)"
+check "S25 nothing turned on or written" sh -c "! grep -q restart '$s25_log' && grep -q 'node.dont-fallback' '$fragment'"
+denoise_unit ""
+expect "S25 the user's systemd out of reach: pending" 75 "$(denoise_migration_status)"
 rm -rf "$HOME/.config/pipewire/omarchy-audio-input-denoise.conf" "$HOME/.config/pipewire/omarchy-audio-input-denoise.conf.d" \
-  "$HOME/.local/lib/ladspa" "$HOME/shims/pactl" "$HOME/s25.systemctl"
+  "$HOME/.local/lib/ladspa" "$HOME/shims/pactl" "$s25_log"
 printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/systemctl"
 
 echo "== S23 uwsm's session env: upstream's env.d file, and a block only for an older uwsm"

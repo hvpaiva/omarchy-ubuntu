@@ -46,11 +46,13 @@ write_config() {
   [[ -f $plugin ]] || { echo "missing $plugin (run install/46-audio-denoise.sh)" >&2; exit 1; }
   install -Dm644 "$host_source" "$host_config"
   mkdir -p "$(dirname "$fragment")"
-  # node.linger: WirePlumber 0.5 destroys a dont-fallback capture whose
-  # microphone is missing when it handles it (at its own start, before its ALSA
+  # No node.dont-fallback: WirePlumber 0.5 destroys a capture that has it when
+  # its microphone is missing (at WirePlumber's own start, before its ALSA
   # monitor has the devices back; or the microphone unplugged), and the
   # filter-chain module goes with it, leaving this host running with no
-  # source. Lingering, the capture waits for the microphone, as under 0.4.
+  # source. Without it the capture takes another microphone meanwhile and goes
+  # back to its own when it returns, as under 0.4, which never read it.
+  # node.linger has it wait quietly where there is no microphone at all.
   cat >"$fragment" <<EOF
 context.modules = [
   { name = libpipewire-module-filter-chain
@@ -73,7 +75,6 @@ context.modules = [
         node.name         = "$capture_name"
         node.passive      = true
         target.object     = "$target"
-        node.dont-fallback = true
         node.linger       = true
       }
       playback.props = {
