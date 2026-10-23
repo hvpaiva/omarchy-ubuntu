@@ -139,10 +139,12 @@ grep -q "The shell logged QML errors" /tmp/s3.log && ko "S3 the replaced shell's
 pieces=$(grep -n 'Pieces outside the checkout' /tmp/s3.log | head -1 | cut -d: -f1)
 migrations=$(grep -n $'\e\\[32mMigrations' /tmp/s3.log | head -1 | cut -d: -f1)
 [[ -n $pieces && -n $migrations ]] && (( pieces < migrations )) && ok "S3 root pieces reapplied before the migrations" || ko "S3 root pieces reapplied before the migrations (lines $pieces, $migrations)"
-# Before 4.5 the port's migrations have nothing to stand in for: all pending.
+# Before 4.5 the port's migrations that stand in for upstream's have nothing
+# to stand in for: pending. The ones for the port's own pieces run on any tag.
+port_own_migrations=(1792714753-denoise-linger.sh)
 check "S3 the old helper's grant stays on 4.0.x" sudo test -f /etc/sudoers.d/99-omarchy-nopasswd-tester
-expect "S3 no port migration recorded before 4.5" 0 "$(ls "$PORT/.applied/migrations" 2>/dev/null | wc -l)"
-expect "S3 pending port migrations say so" "$(find "$PORT/migrations" -name '*.sh' ! -name '*-root.sh' | wc -l)" "$(grep -c "left pending, not applicable yet" /tmp/s3.log)"
+expect "S3 only the port's own migrations recorded before 4.5" "${port_own_migrations[*]}" "$(ls "$PORT/.applied/migrations" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+expect "S3 pending port migrations say so" "$(( $(find "$PORT/migrations" -name '*.sh' ! -name '*-root.sh' | wc -l) - ${#port_own_migrations[@]} ))" "$(grep -c "left pending, not applicable yet" /tmp/s3.log)"
 expect "S3 base tag" "$NEXT" "$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)"
 expect "S3 patches on top" 13 "$(git -C "$OMARCHY_PATH" rev-list --count "$NEXT..ubuntu")"
 expect "S3 version" "${NEXT#v}" "$(omarchy-version)"

@@ -7,7 +7,7 @@
 # default once more; where it is off, the next `on` writes the new one.
 #
 # Pending (75) while the source does not come back: an update run outside the
-# session, where pactl reaches no PipeWire.
+# desktop session, where pactl reaches no PipeWire.
 fragment=${XDG_CONFIG_HOME:-$HOME/.config}/pipewire/omarchy-audio-input-denoise.conf.d/90-denoise.conf
 [[ -f $fragment ]] || exit 0
 grep -q 'node\.linger' "$fragment" && exit 0
