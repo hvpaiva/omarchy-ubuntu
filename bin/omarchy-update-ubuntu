@@ -129,7 +129,14 @@ start_update() {
     end_update_authorization
     authorize_update || { echo "sudo authorization failed; classic sudo is the sudo now, nothing else was changed." >&2; exit 1; }
   fi
-  stay_awake start
+  if ! stay_awake start; then
+    # Step 55 leaves an alternative set by hand, and the inhibitor's refusal
+    # alone does not say the way back.
+    if [[ -x /usr/bin/sudo.ws && $(readlink -f /usr/bin/sudo) != /usr/bin/sudo.ws ]]; then
+      echo "Omarchy's update needs classic sudo, and sudo is $(readlink -f /usr/bin/sudo), set by hand: sudo update-alternatives --set sudo /usr/bin/sudo.ws, then update again." >&2
+    fi
+    exit 1
+  fi
 }
 trap 'end_update_authorization; stay_awake stop' EXIT
 

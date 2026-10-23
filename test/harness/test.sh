@@ -637,6 +637,14 @@ EOF
   expect "R4 classic sudo is the sudo" /usr/bin/sudo.ws "$(readlink -f /usr/bin/sudo)"
   expect "R4 two prompts, sudo-rs's and classic sudo's, none after the inhibitor" 2 "$prompts"
   check "R4 the root step ran on classic sudo's authorization" test -x /usr/bin/omarchy-theme-set-browser-policy
+  # sudo-rs chosen by hand stays, so the inhibitor refuses: the update stops
+  # and says the way back.
+  echo harness | sudo -S update-alternatives --set sudo /usr/lib/cargo/bin/sudo >/dev/null 2>&1
+  sudo -k
+  TYPESCRIPT=/tmp/r4b.typescript python3 /tmp/answer-sudo.py omarchy-update-ubuntu -y >/dev/null 2>&1; st=$?
+  check "R4 sudo-rs set by hand: the update stops" test "$st" != 0
+  expect "R4 and sudo-rs stays" /usr/lib/cargo/bin/sudo "$(readlink -f /usr/bin/sudo)"
+  check "R4 and it says the way back" grep -q 'update-alternatives --set sudo /usr/bin/sudo.ws' /tmp/r4b.typescript
   echo harness | sudo -S sh -c "echo 'tester ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/tester" 2>/dev/null
   sudo update-alternatives --set sudo /usr/bin/sudo.ws >/dev/null
   printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
