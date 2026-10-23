@@ -1,4 +1,4 @@
-From a44778dce31b5ea9dbbc23725437e2c0640eee8a Mon Sep 17 00:00:00 2001
+From 559d24b2fac0cb96ea4a81a9d1b47a13ac845ce9 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <contact@hvpaiva.dev>
 Date: Mon, 28 Sep 2026 14:58:08 -0300
 Subject: [PATCH 01/12] Ubuntu port: dpkg/apt backend behind the Arch package
@@ -22,9 +22,9 @@ dpkg and snap, and omarchy-pkg-installed answers for names outside the set.
  bin/omarchy-pkg-missing         |    3 +
  bin/omarchy-pkg-present         |    3 +
  bin/omarchy-pkg-remove          |    3 +
- bin/omarchy-pkg-ubuntu          | 1073 +++++++++++++++++++++++++++++++
+ bin/omarchy-pkg-ubuntu          | 1155 +++++++++++++++++++++++++++++++
  shell/plugins/menu/MenuModel.js |   13 +-
- 12 files changed, 1135 insertions(+), 1 deletion(-)
+ 12 files changed, 1217 insertions(+), 1 deletion(-)
  create mode 100755 bin/omarchy-pkg-installed
  create mode 100755 bin/omarchy-pkg-ubuntu
 
@@ -185,14 +185,14 @@ index 37ca448e..661bf136 100755
    --preview 'yay -Qi {1}'
 diff --git a/bin/omarchy-pkg-ubuntu b/bin/omarchy-pkg-ubuntu
 new file mode 100755
-index 00000000..b6974fef
+index 00000000..34f15128
 --- /dev/null
 +++ b/bin/omarchy-pkg-ubuntu
-@@ -0,0 +1,1073 @@
+@@ -0,0 +1,1155 @@
 +#!/bin/bash
 +
 +# omarchy:summary=Ubuntu port package backend: Arch names resolved to apt, vendor repos, .debs, Omarchy packages, flatpaks, mise tools and fonts
-+# omarchy:args=apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id|release-refresh <package...>
++# omarchy:args=apt-names|dpkg-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id|release-refresh <package...>
 +# omarchy:hidden=true
 +# omarchy:requires-sudo=true
 +
@@ -759,10 +759,73 @@ index 00000000..b6974fef
 +  flatpak install -y --noninteractive -- flathub "$1"
 +}
 +
++# What a mise recipe installs is declared in the port's own file in mise's
++# global layer, not the user's config.toml, where a tool declared wins over
++# it; mise's shims put it on PATH, with no wrapper to declare it again after
++# a removal.
++mise_port_config=$HOME/.config/mise/conf.d/omarchy-ubuntu.toml
++
++# A command Arch's package names otherwise than the tool's binary (helix, for
++# hx) runs the shim through a launcher, there while the tool is.
++mise_launcher() { # <bin>
++  printf '#!/bin/sh\nexec %s "$@"\n' "$1"
++}
++
++# Declared and installed. mise where answers for an install no config asks
++# for any more, whose shim then fails in every shell.
++mise_active() {
++  mise ls --json "$1" 2>/dev/null | jq -e 'any(.[]; .active)' >/dev/null
++}
++
++# A copy that is not mise's counts as well (Ubuntu's, a vendor's, cargo's, a
++# wrapper of the user's): what is here already is left as it is. An
++# executable by that name on PATH outside mise's shims and installs, the
++# recipe's own launcher aside.
++mise_elsewhere() { # <command> <bin>
++  local data=${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise} name path
++  local -a names=("$1")
++  [[ $2 == "$1" ]] || names+=("$2")
++  for name in "${names[@]}"; do
++    while IFS= read -r path; do
++      case $path in
++      "$data"/shims/* | "$data"/installs/*) continue ;;
++      esac
++      [[ $path == "$HOME/.local/bin/$1" ]] && cmp -s "$path" <(mise_launcher "$2") && continue
++      return 0
++    done < <(type -aP -- "$name")
++  done
++  return 1
++}
++
 +install_mise() {
 +  local tool=$1 command=$2 bin=${3:-$2}
-+  omarchy-mise-install "$tool" "$command" "$bin" &&
-+    MISE_MINIMUM_RELEASE_AGE=0 mise use -g --quiet "$tool"
++  mkdir -p "${mise_port_config%/*}" &&
++    MISE_MINIMUM_RELEASE_AGE=0 mise use --path "$mise_port_config" --quiet "$tool" &&
++    mise reshim || return 1
++  # rm first: a dotfiles link in its place keeps its target.
++  if [[ $command != "$bin" ]] && mise_active "$tool"; then
++    mkdir -p "$HOME/.local/bin" && rm -f "$HOME/.local/bin/$command" &&
++      mise_launcher "$bin" >"$HOME/.local/bin/$command" && chmod 755 "$HOME/.local/bin/$command"
++  fi
++}
++
++# The tool leaves the port's file, and stays installed while another config
++# (the user's) still declares it, which is said, with the way to drop it.
++remove_mise() {
++  local tool=$1 command=$2 bin=${3:-$2} declared
++  if [[ -f $mise_port_config ]]; then
++    mise use --path "$mise_port_config" --remove "$tool" &>/dev/null
++  fi
++  declared=$(mise ls --json "$tool" 2>/dev/null | jq -r '.[].source.path // empty' | sort -u)
++  if [[ -n $declared ]]; then
++    echo "$tool stays installed, still declared in $(paste -sd' ' <<<"$declared"): take it out there, then run mise uninstall --all $tool"
++  else
++    mise uninstall --all "$tool" &>/dev/null
++  fi
++  mise reshim
++  if [[ $command != "$bin" ]] && ! mise_active "$tool" && cmp -s "$HOME/.local/bin/$command" <(mise_launcher "$bin"); then
++    rm -f "$HOME/.local/bin/$command"
++  fi
 +}
 +
 +nerdfont_dir() {
@@ -1025,7 +1088,7 @@ index 00000000..b6974fef
 +  pool | deb) dpkg_installed "$1" ;;
 +  opr) [[ -s $(opr_manifest "$1") ]] ;;
 +  flatpak) flatpak info -- "$1" &>/dev/null ;;
-+  mise) command -v -- "$2" &>/dev/null ;;
++  mise) mise_active "$1" || mise_elsewhere "$2" "${3:-$2}" ;;
 +  nerdfont) fc-list : family | grep -iE "^$2[^,]* Nerd Font" >/dev/null ;;
 +  i386) dpkg_installed "$1:i386" ;;
 +  custom) "installed_custom_${1//-/_}" ;;
@@ -1073,11 +1136,7 @@ index 00000000..b6974fef
 +  pool | deb) purge_installed "$1" ;;
 +  opr) remove_opr "$1" ;;
 +  flatpak) flatpak info -- "$1" &>/dev/null && flatpak uninstall -y --noninteractive -- "$1" ;;
-+  mise)
-+    rm -f "$HOME/.local/bin/$2"
-+    mise rm -g "$1" &>/dev/null
-+    mise uninstall --all "$1" &>/dev/null
-+    ;;
++  mise) remove_mise "$@" ;;
 +  nerdfont) rm -rf "$(nerdfont_dir "$1")" && fc-cache -f >/dev/null ;;
 +  i386) dpkg_installed "$1:i386" && as_root apt-get purge -y -- "$1:i386" ;;
 +  custom) "remove_custom_${1//-/_}" ;;
@@ -1085,6 +1144,28 @@ index 00000000..b6974fef
 +  libretro-assets) remove_libretro_assets "$@" ;;
 +  esac
 +  return 0
++}
++
++recipe_dpkg_names() {
++  local kind=$1
++  shift
++  case $kind in
++  repo) shift && printf '%s\n' "$@" ;;
++  pool | deb) printf '%s\n' "$1" ;;
++  i386) printf '%s:i386\n' "$1" ;;
++  esac
++}
++
++# dpkg_names <package>: the dpkg packages it comes as; nothing for what lives
++# outside dpkg (mise, opr, flatpak, fonts, builds), which a release upgrade
++# never takes away (step 47 --release).
++dpkg_names() {
++  local recipe
++  if recipe=$(recipe_of "$1"); then
++    with_recipe recipe_dpkg_names "$recipe"
++  else
++    apt_names "$1"
++  fi
 +}
 +
 +installed() {
@@ -1248,6 +1329,7 @@ index 00000000..b6974fef
 +
 +case $command in
 +apt-names) apt_names "${1:?package name required}" ;;
++dpkg-names) dpkg_names "${1:?package name required}" ;;
 +installed) installed "${1:?package name required}" ;;
 +missing) missing "$@" ;;
 +present) present "$@" ;;
@@ -1258,7 +1340,7 @@ index 00000000..b6974fef
 +launch-id) launch_id "${1:?package name required}" "${2:?desktop id required}" ;;
 +release-refresh) release_refresh ;;
 +*)
-+  echo "Usage: omarchy-pkg-ubuntu apt-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id|release-refresh <package...>" >&2
++  echo "Usage: omarchy-pkg-ubuntu apt-names|dpkg-names|installed|missing|present|add|drop|pick-install|pick-remove|launch-id|release-refresh <package...>" >&2
 +  exit 1
 +  ;;
 +esac

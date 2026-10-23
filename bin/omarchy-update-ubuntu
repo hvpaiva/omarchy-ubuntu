@@ -368,9 +368,10 @@ mkdir -p "$applied_dir"
 # the .debs built per release (15 --release), the system pieces (55, whose
 # classic sudo start_update already put back), the sudoers rules
 # and system tweaks (57, 58, 70); then upstream's default packages the upgrade
-# removed (47) and the Install menu's .debs taken in the old release's build
-# (omarchy-pkg-ubuntu release-refresh). The tool steps below redo every build
-# that lost a library.
+# removed (47 --release, against the record of what dpkg had, which each
+# update on an unchanged release writes) and the Install menu's .debs taken in
+# the old release's build (omarchy-pkg-ubuntu release-refresh). The tool steps
+# below redo every build that lost a library.
 # Without a record (a port older than this), the release Quickshell was built
 # for, which its binary names, says where the machine came from.
 release_now=$(. /etc/os-release && echo "$VERSION_ID")
@@ -385,9 +386,11 @@ if [[ -n $release_was && $release_was != "$release_now" ]]; then
     # shellcheck disable=SC2086  # the step's one option, or none
     run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/$script.sh" $args
   done
-  REPO_DIR=$PORT_DIR "$PORT_DIR/install/47-base-packages.sh"
+  REPO_DIR=$PORT_DIR "$PORT_DIR/install/47-base-packages.sh" --release
   "$OMARCHY_PATH/bin/omarchy-pkg-ubuntu" release-refresh ||
     echo -e "\e[33mAn Install-menu package is still the old release's build; installing it again from the menu takes $release_now's.\e[0m"
+else
+  REPO_DIR=$PORT_DIR "$PORT_DIR/install/47-base-packages.sh" --snapshot
 fi
 echo "$release_now" >"$applied_dir/ubuntu-release"
 
