@@ -2,9 +2,10 @@
 # Omarchy's system tweaks that apply on Ubuntu (root). The files come straight
 # from the checkout's etc/ tree so they follow upstream; only the admin group
 # changes (%wheel -> %sudo). Left out on purpose, see docs/deviations.md:
-# Arch boot stack (mkinitcpio, limine, plymouth, sddm), faillock (not in
-# Ubuntu's PAM stack), nsswitch (Ubuntu's carries sss). zram, cups-browsed and
-# docker need a package or an edit here and live in 58-system-extras-root.sh.
+# Arch boot stack (mkinitcpio, limine), faillock (not in Ubuntu's PAM stack),
+# nsswitch (Ubuntu's carries sss). Plymouth's configuration is step 59's and
+# SDDM's step 66's. zram, cups-browsed and docker need a package or an edit
+# here and live in 58-system-extras-root.sh.
 source "${REPO_DIR:?}/lib/common.sh"
 
 etc=$OMARCHY_PATH/etc
@@ -62,8 +63,8 @@ skipped_files=(
   etc/nsswitch.conf                                      # Ubuntu's carries sss for the corporate login
   etc/plymouth/plymouthd.conf                             # 59 sets the theme through update-alternatives
   etc/profile.d/omarchy.sh                                # 55 writes the dev-link version
-  etc/sddm.conf.d/10-theme.conf                           # GDM
-  etc/sddm.conf.d/10-wayland.conf                         # GDM
+  etc/sddm.conf.d/10-theme.conf                           # 66, where SDDM runs Omarchy's theme
+  etc/sddm.conf.d/10-wayland.conf                         # 66, where SDDM runs Omarchy's theme
   etc/security/faillock.conf                              # no faillock in Ubuntu's PAM
   etc/sudoers.d/omarchy-theme-browser                     # 70-browser-policy-root.sh
   etc/systemd/resolved.conf.d/20-docker-dns.conf          # 58

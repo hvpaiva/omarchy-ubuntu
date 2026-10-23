@@ -17,8 +17,9 @@ real thing.
 This project exists for the other case: a work laptop that has to stay on
 Ubuntu (company policy, managed fleet, corporate VPN or agents that only
 support Ubuntu), where you still want Omarchy's desktop experience. It keeps
-Ubuntu, GDM and apt, and layers Omarchy on top the way Omarchy's own developers
-run it: a git checkout in "dev link" mode, with the shell built from source.
+Ubuntu and apt (and GDM on 24.04), and layers Omarchy on top the way Omarchy's
+own developers run it: a git checkout in "dev link" mode, with the shell built
+from source.
 
 ## What you get
 
@@ -40,8 +41,9 @@ run it: a git checkout in "dev link" mode, with the shell built from source.
 
 ## What stays Ubuntu
 
-GDM instead of SDDM (Omarchy's SDDM theme needs SDDM 0.21, newer than 24.04's;
-26.04 has it, and the port does not use it there yet), Ubuntu's Plymouth,
+GDM instead of SDDM on 24.04 (Omarchy's SDDM theme needs SDDM 0.21, newer than
+24.04's; on 26.04 the port sets up SDDM with the theme, and GDM stays installed
+beside it), Ubuntu's Plymouth,
 apt instead of pacman (the Omarchy "Install" menu maps Arch names to apt or to
 the vendor's own channel), and no AUR. See [docs/deviations.md](docs/deviations.md).
 
@@ -56,8 +58,12 @@ git clone https://github.com/<you>/omarchy-ubuntu ~/.local/share/omarchy-ubuntu
 The bootstrap is idempotent and resumable (`bootstrap.sh --list`, `bootstrap.sh 40 45`).
 It asks for your password for the root steps (through polkit when a session is
 up, otherwise sudo). Expect 20 to 40 minutes: it downloads Qt (about 1 GB) and
-compiles Quickshell and the companion apps. When it finishes, log out and pick
-`Omarchy (Hyprland uwsm)` in GDM once; autologin then targets it. Autologin
+compiles Quickshell and the companion apps. When it finishes on 24.04, log out
+and pick `Omarchy (Hyprland uwsm)` in GDM once; autologin then targets it. On
+26.04, reboot: SDDM with Omarchy's theme takes over from GDM, offers that
+session first and keeps the automatic login GDM had;
+`install/66-session-root.sh --undo` (as root, with `REPO_DIR`) makes GDM the
+display manager again, and the updates leave it. Autologin
 cannot unlock Ubuntu's `login` keyring, which is encrypted with your password;
 run `bin/omarchy-keyring-passwordless` once from a terminal to get Omarchy's
 passwordless default keyring (see [docs/gotchas.md](docs/gotchas.md)).
@@ -166,7 +172,8 @@ built per release, classic sudo, the sudoers rules and system tweaks,
 upstream's default packages the upgrade removed, and the Install menu's
 `.deb`s built per release (Sunshine, umu-launcher) in the new release's build.
 Then every build that lost a library to the upgrade (the companion apps,
-Quickshell, the tools) is rebuilt.
+Quickshell, the tools) is rebuilt, and SDDM with Omarchy's theme is set up to
+take over from GDM at the next boot, as on a new 26.04 install.
 Expect the sudo password a second time: the switch back to classic sudo starts
 a new credential cache.
 
