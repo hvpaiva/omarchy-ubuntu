@@ -113,6 +113,22 @@ end_update_authorization() {
 }
 start_update() {
   authorize_update || { echo "sudo authorization failed; nothing was changed." >&2; exit 1; }
+  # A release upgrade makes sudo-rs the sudo, and 4.5's inhibitor refuses one
+  # without -N: classic sudo first, as step 55 puts it, whose run in the
+  # release step below then finds it done. sudo.ws keeps credentials apart
+  # from sudo-rs's, and the inhibitor's root calls pass -N, which neither
+  # caches nor refreshes one: the update asks once more, under sudo.ws, before
+  # anything else, and sudo-rs's goes.
+  if REPO_DIR=$PORT_DIR "$PORT_DIR/install/55-root.sh" --sudo-due; then
+    local sudo_rs
+    sudo_rs=$(readlink -f /usr/bin/sudo)
+    run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/55-root.sh" --sudo
+    if (( update_authorized )); then
+      "$sudo_rs" -k || true
+    fi
+    end_update_authorization
+    authorize_update || { echo "sudo authorization failed; classic sudo is the sudo now, nothing else was changed." >&2; exit 1; }
+  fi
   stay_awake start
 }
 trap 'end_update_authorization; stay_awake stop' EXIT
@@ -342,7 +358,8 @@ mkdir -p "$applied_dir"
 # here. Once per release the root steps that hold what is per release run
 # again, as a bootstrap on it would: sources and apt packages, with what came
 # from those sources moved to the new release's builds (10 and 12 --release),
-# the .debs built per release (15 --release), classic sudo (55), the sudoers rules
+# the .debs built per release (15 --release), the system pieces (55, whose
+# classic sudo start_update already put back), the sudoers rules
 # and system tweaks (57, 58, 70); then upstream's default packages the upgrade
 # removed (47) and the Install menu's .debs taken in the old release's build
 # (omarchy-pkg-ubuntu release-refresh). The tool steps below redo every build

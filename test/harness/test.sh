@@ -52,11 +52,13 @@ codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
 if update-alternatives --query sudo >/dev/null 2>&1; then
   echo "== R2 sudo: classic sudo over sudo-rs, unless an admin chose by hand"
   step55() { (cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester ./install/55-root.sh --sudo) >/tmp/r2.log 2>&1; }
+  sudo_due() { (cd "$PORT" && REPO_DIR=$PORT ./install/55-root.sh --sudo-due) >/dev/null 2>&1; echo $?; }
   sudoers_as_root() { # sudoers_as_root <name> <rule>: install_sudoers as a root step calls it
     (cd "$PORT" && printf '%s\n' "$2" | sudo env REPO_DIR="$PORT" OMARCHY_USER=tester bash -c "source lib/common.sh; install_sudoers $1") >/tmp/r2.log 2>&1
   }
   pattern_rule='%sudo ALL=(root) NOPASSWD: /usr/bin/timedatectl ^set-timezone [A-Za-z0-9_+/-]+$'
   sudo update-alternatives --set sudo /usr/lib/cargo/bin/sudo >/dev/null
+  expect "R2 --sudo-due, as the user: not for sudo-rs set by hand" 1 "$(sudo_due)"
   step55 || { ko "R2 step 55 --sudo, alternative set by hand"; onfail /tmp/r2.log; }
   expect "R2 sudo-rs set by hand stays" /usr/lib/cargo/bin/sudo "$(readlink -f /usr/bin/sudo)"
   check "R2 says it leaves it" grep -q 'set by hand' /tmp/r2.log
@@ -67,8 +69,10 @@ if update-alternatives --query sudo >/dev/null 2>&1; then
   sudoers_as_root omarchy-r2-plain 'Defaults passwd_tries=10' || ko "R2 install_sudoers, a rule sudo-rs reads"
   check "R2 a rule sudo-rs reads goes in, 440" sudo sh -c 'test "$(stat -c %a /etc/sudoers.d/omarchy-r2-plain)" = 440'
   sudo update-alternatives --auto sudo >/dev/null
+  expect "R2 --sudo-due: due for sudo-rs the release chose" 0 "$(sudo_due)"
   step55 || { ko "R2 step 55 --sudo"; onfail /tmp/r2.log; }
   expect "R2 classic sudo selected" /usr/bin/sudo.ws "$(readlink -f /usr/bin/sudo)"
+  expect "R2 --sudo-due: done" 1 "$(sudo_due)"
   check "R2 visudo moves with it" sh -c '[ "$(readlink -f /usr/sbin/visudo)" = /usr/sbin/visudo.ws ]'
   expect "R2 the pattern rule goes in under classic sudo" 0 "$(sudoers_as_root omarchy-r2-pattern "$pattern_rule"; echo $?)"
   check "R2 and is in place" sudo test -f /etc/sudoers.d/omarchy-r2-pattern
@@ -349,15 +353,16 @@ printf '#!/bin/bash\n[[ $1 != start ]] || /usr/bin/sudo -N /usr/bin/true\n[[ ${O
 # A missing helper sends the update through a root step after the inhibitor's.
 echo harness | sudo -S rm -f /usr/bin/omarchy-theme-set-browser-policy 2>/dev/null
 sudo -k
-# A terminal that answers each prompt as it comes: typed-ahead input would be
-# eaten by gum, which reads the terminal for its colours.
+# A terminal that answers each prompt as it comes, classic sudo's or
+# sudo-rs's: typed-ahead input would be eaten by gum, which reads the terminal
+# for its colours.
 cat >/tmp/answer-sudo.py <<'EOF'
 import os, pty, select, signal, sys, time
 pid, fd = pty.fork()
 if pid == 0:
     os.execvp(sys.argv[1], sys.argv[1:])
 prompts, tail, deadline = 0, b"", time.time() + 300
-with open("/tmp/s16.typescript", "wb") as log:
+with open(os.environ.get("TYPESCRIPT", "/tmp/s16.typescript"), "wb") as log:
     while time.time() < deadline:
         if not select.select([fd], [], [], 1)[0]:
             continue
@@ -369,7 +374,7 @@ with open("/tmp/s16.typescript", "wb") as log:
             break
         log.write(data)
         tail = (tail + data)[-200:]
-        if b"password for tester" in tail:
+        if b"password for tester" in tail or b"[sudo: authenticate] Password:" in tail:
             prompts, tail = prompts + 1, b""
             time.sleep(0.2)
             os.write(fd, b"harness\n")
@@ -575,13 +580,14 @@ sudo rm -f /etc/apt/sources.list.d/omarchy-ubuntu-test-*.sources
 echo "== R3 a release upgrade: the steps that hold what is per release run once"
 # Stubs in the steps' place record each call: the steps themselves need the
 # network, which the full harness has. The record is in the home, as root may
-# not append to another user's file in /tmp (protected_regular).
+# not append to another user's file in /tmp (protected_regular). Step 55's
+# --sudo-due says no switch is due, R4's business.
 release=$(. /etc/os-release && echo "$VERSION_ID")
 r3_log=$HOME/r3.steps
 r3_steps=(10-apt-root 12-chromium-root 15-extra-debs-root 55-root 57-system-tweaks-root 58-system-extras-root 70-browser-policy-root 47-base-packages)
 : >"$r3_log"
 for s in "${r3_steps[@]}"; do
-  printf '#!/bin/bash\necho "%s $*" >>%s\n' "$s" "$r3_log" >"$PORT/install/$s.sh"
+  printf '#!/bin/bash\n[[ $* != --sudo-due ]] || exit 1\necho "%s $*" >>%s\n' "$s" "$r3_log" >"$PORT/install/$s.sh"
 done
 release_steps=$'10-apt-root --release\n12-chromium-root --release\n15-extra-debs-root --release\n55-root \n57-system-tweaks-root \n58-system-extras-root \n70-browser-policy-root \n47-base-packages '
 echo 22.04 >"$PORT/.applied/ubuntu-release"
@@ -603,6 +609,38 @@ omarchy-update-ubuntu -y >/tmp/r3c.log 2>&1 || onfail /tmp/r3c.log
 check "R3 no record: the release Quickshell was built for counts" grep -q -- '15-extra-debs-root --release' "$r3_log"
 rm -f "$HOME/.local/bin/quickshell" "$r3_log"
 git -C "$PORT" checkout -q -- install/
+
+if update-alternatives --query sudo >/dev/null 2>&1; then
+  echo "== R4 the first update on sudo-rs: classic sudo before the inhibitor, on a terminal"
+  # sudo-rs as the release upgrade leaves it, a password to type, and an
+  # inhibitor that refuses a sudo without -N, as 4.5's does, then needs root
+  # without refreshing the timestamp. A missing helper sends the update
+  # through a root step after it.
+  sudo update-alternatives --auto sudo >/dev/null
+  echo tester:harness | sudo chpasswd
+  echo 'tester ALL=(ALL) ALL' | sudo tee /etc/sudoers.d/tester >/dev/null
+  cat >"$HOME/shims/omarchy-update-stay-awake" <<'EOF'
+#!/bin/bash
+if [[ $1 == start ]]; then
+  LC_ALL=C /usr/bin/sudo -h 2>&1 | grep -Eq '^usage: sudo .*\[[^]]*N[^]]*\]' || {
+    echo "This sudo does not support --no-update; refusing mixed-trust work." >&2
+    exit 1
+  }
+  /usr/bin/sudo -N /usr/bin/true
+fi
+EOF
+  echo harness | sudo -S rm -f /usr/bin/omarchy-theme-set-browser-policy 2>/dev/null
+  sudo -k
+  prompts=$(TYPESCRIPT=/tmp/r4.typescript python3 /tmp/answer-sudo.py omarchy-update-ubuntu -y 2>/dev/null); st=$?
+  expect "R4 updater exit" 0 "$st"
+  [[ $st == 0 ]] || onfail /tmp/r4.typescript
+  expect "R4 classic sudo is the sudo" /usr/bin/sudo.ws "$(readlink -f /usr/bin/sudo)"
+  expect "R4 two prompts, sudo-rs's and classic sudo's, none after the inhibitor" 2 "$prompts"
+  check "R4 the root step ran on classic sudo's authorization" test -x /usr/bin/omarchy-theme-set-browser-policy
+  echo harness | sudo -S sh -c "echo 'tester ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/tester" 2>/dev/null
+  sudo update-alternatives --set sudo /usr/bin/sudo.ws >/dev/null
+  printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/omarchy-update-stay-awake"
+fi
 
 echo "== S22 WirePlumber's drop-ins follow the WirePlumber on the machine"
 wp_dir=$HOME/.config/systemd/user/wireplumber.service.d
