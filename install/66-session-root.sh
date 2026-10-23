@@ -173,9 +173,13 @@ if (( switching )); then
   fi
   # What Omarchy's installer records: the user and session the greeter offers
   # first. install replaces a link in the sddm user's directory, where a
-  # redirect would not follow it.
+  # redirect would follow it; from a file, as 26.04's install (uutils) fails
+  # to read /dev/stdin over a file already there.
   install -d -m 0750 -o sddm -g sddm /var/lib/sddm
-  printf '[Last]\nSession=omarchy.desktop\nUser=%s\n' "$OMARCHY_USER" | install -m 644 -o sddm -g sddm /dev/stdin /var/lib/sddm/state.conf
+  state=$(mktemp)
+  printf '[Last]\nSession=omarchy.desktop\nUser=%s\n' "$OMARCHY_USER" >"$state"
+  install -m 644 -o sddm -g sddm "$state" /var/lib/sddm/state.conf
+  rm -f "$state"
   log "SDDM the display manager, from the next boot"
   make_display_manager sddm /usr/bin/sddm
   note "GDM back: sudo env REPO_DIR=$REPO_DIR $REPO_DIR/install/66-session-root.sh --undo"
