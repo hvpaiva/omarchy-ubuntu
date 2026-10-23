@@ -605,6 +605,36 @@ sudo rm -f /usr/bin/wireplumber /usr/local/bin/wireplumber
 rm -f "$HOME/fake-wireplumber" "$HOME/s22.systemctl"
 printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/systemctl"
 
+echo "== S25 the denoise capture lingers, so WirePlumber 0.5 waits for its microphone"
+fragment=$HOME/.config/pipewire/omarchy-audio-input-denoise.conf.d/90-denoise.conf
+denoise_migration=$PORT/migrations/1792714753-denoise-linger.sh
+# A session where the microphone and the denoise source are both up.
+printf '#!/bin/bash\n[[ "$1 $2" == "list sources" ]] && printf "1\\talsa_input.test\\n2\\tomarchy_denoise_source\\n"\nexit 0\n' >"$HOME/shims/pactl"
+chmod +x "$HOME/shims/pactl"
+printf '#!/bin/bash\necho "$*" >>"$HOME/s25.systemctl"\n' >"$HOME/shims/systemctl"
+mkdir -p "$HOME/.local/lib/ladspa" && touch "$HOME/.local/lib/ladspa/libdeep_filter_ladspa.so"
+: >"$HOME/s25.systemctl"
+omarchy-audio-input-denoise on alsa_input.test >/tmp/s25.log 2>&1 || onfail /tmp/s25.log
+check "S25 the capture lingers" grep -qx ' *node.linger *= true' "$fragment"
+check "S25 on a running host, the host starts again on the config" grep -qx -- '--user restart omarchy-audio-input-denoise.service' "$HOME/s25.systemctl"
+# What the command wrote before, and the migration that rewrites it where the denoise is on.
+sed -i '/node\.linger/d' "$fragment"
+: >"$HOME/s25.systemctl"
+(OMARCHY_PATH=$OMARCHY_PATH PORT_DIR=$PORT bash -euo pipefail "$denoise_migration") >/tmp/s25b.log 2>&1; st=$?
+expect "S25 the migration" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s25b.log
+check "S25 the old config lingers now" grep -qx ' *node.linger *= true' "$fragment"
+expect "S25 for the same microphone" 'alsa_input.test' "$(sed -n 's/.*target\.object *= *"\([^"]*\)".*/\1/p' "$fragment")"
+check "S25 and the host started again" grep -qx -- '--user restart omarchy-audio-input-denoise.service' "$HOME/s25.systemctl"
+sed -i '/node\.linger/d' "$fragment"
+printf '#!/bin/bash\necho "$*" >>"$HOME/s25.systemctl"\n[[ $* == *is-enabled* ]] && exit 1\nexit 0\n' >"$HOME/shims/systemctl"
+: >"$HOME/s25.systemctl"
+(OMARCHY_PATH=$OMARCHY_PATH PORT_DIR=$PORT bash -euo pipefail "$denoise_migration") >/tmp/s25c.log 2>&1 || onfail /tmp/s25c.log
+check "S25 with the denoise off, nothing is turned on" sh -c "! grep -q restart '$HOME/s25.systemctl' && ! grep -q 'node.linger' '$fragment'"
+rm -rf "$HOME/.config/pipewire/omarchy-audio-input-denoise.conf" "$HOME/.config/pipewire/omarchy-audio-input-denoise.conf.d" \
+  "$HOME/.local/lib/ladspa" "$HOME/shims/pactl" "$HOME/s25.systemctl"
+printf '#!/bin/bash\nexit 0\n' >"$HOME/shims/systemctl"
+
 echo "== S23 uwsm's session env: upstream's env.d file, and a block only for an older uwsm"
 uwsm_env=$HOME/.config/uwsm/env
 fake_uwsm() { # fake_uwsm <version>: dpkg reports uwsm at that version

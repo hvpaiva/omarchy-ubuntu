@@ -46,6 +46,11 @@ write_config() {
   [[ -f $plugin ]] || { echo "missing $plugin (run install/46-audio-denoise.sh)" >&2; exit 1; }
   install -Dm644 "$host_source" "$host_config"
   mkdir -p "$(dirname "$fragment")"
+  # node.linger: WirePlumber 0.5 destroys a dont-fallback capture whose
+  # microphone is missing when it handles it (at its own start, before its ALSA
+  # monitor has the devices back; or the microphone unplugged), and the
+  # filter-chain module goes with it, leaving this host running with no
+  # source. Lingering, the capture waits for the microphone, as under 0.4.
   cat >"$fragment" <<EOF
 context.modules = [
   { name = libpipewire-module-filter-chain
@@ -69,6 +74,7 @@ context.modules = [
         node.passive      = true
         target.object     = "$target"
         node.dont-fallback = true
+        node.linger       = true
       }
       playback.props = {
         node.name   = "$source_name"
@@ -98,7 +104,10 @@ cmd_on() {
   hardware_sources | grep -qx "$target" || echo "warning: $target is not present right now" >&2
   write_config "$target"
   systemctl --user daemon-reload
-  systemctl --user enable --now "$unit" >/dev/null 2>&1 || systemctl --user restart "$unit"
+  # A restart, not enable --now: a host already running reads the config only
+  # when it starts.
+  systemctl --user enable "$unit" >/dev/null 2>&1
+  systemctl --user restart "$unit"
   wait_for_source || { echo "$source_name did not appear; journalctl --user -u $unit" >&2; exit 1; }
   pactl set-default-source "$source_name"
   move_mute "$target" "$source_name"
