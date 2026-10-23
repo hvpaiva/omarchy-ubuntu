@@ -676,6 +676,96 @@ sudo rm -f /usr/share/uwsm/env.d/10-omarchy
 (( dev_link == 0 )) || sudo rm -f /usr/share/omarchy
 rm -rf "$HOME/fake-uwsm" "$HOME/fake-uwsm.deb"
 
+echo "== S24 the display manager: SDDM where the release's runs Omarchy's theme, GDM before"
+fake_deb() { # fake_deb <package> <version> [<path> <content>]...: dpkg has the package at that version, with those files
+  local pkg=$1 version=$2 root=$HOME/fake-$1
+  shift 2
+  rm -rf "$root" && mkdir -p "$root/DEBIAN"
+  printf 'Package: %s\nVersion: %s\nArchitecture: all\nMaintainer: harness <harness@localhost>\nDescription: stand-in\n' "$pkg" "$version" >"$root/DEBIAN/control"
+  while (( $# >= 2 )); do
+    mkdir -p "$root$(dirname "$1")" && printf '%s\n' "$2" >"$root$1"
+    shift 2
+  done
+  dpkg-deb --root-owner-group --build "$root" "$root.deb" >/dev/null && sudo dpkg -i "$root.deb" >/dev/null
+}
+step66() { (cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester ./install/66-session-root.sh "$@") >/tmp/s24.log 2>&1 || { ko "S24 step 66 $* exit"; onfail /tmp/s24.log; }; }
+due66() { (cd "$PORT" && REPO_DIR=$PORT ./install/66-session-root.sh --due) >/dev/null 2>&1; echo $?; }
+dm() { cat /etc/X11/default-display-manager 2>/dev/null; }
+# A desktop install's GDM, automatic login on; the image has no apt lists, so
+# sddm's candidate is what dpkg has.
+sudo mkdir -p /etc/X11 /etc/gdm3 /etc/systemd/system
+echo /usr/sbin/gdm3 | sudo tee /etc/X11/default-display-manager >/dev/null
+sudo ln -sf /lib/systemd/system/gdm3.service /etc/systemd/system/display-manager.service
+sudo install -m 755 /dev/null /usr/sbin/gdm3
+printf '[daemon]\nAutomaticLoginEnable=True\nAutomaticLogin=tester\n' | sudo tee /etc/gdm3/custom.conf >/dev/null
+expect "S24 no SDDM that runs the theme: not due" 1 "$(due66)"
+step66
+expect "S24 GDM stays" /usr/sbin/gdm3 "$(dm)"
+check "S24 and says why" grep -q 'needs SDDM 0.21, Ubuntu [0-9.]* offers none' /tmp/s24.log
+fake_deb sddm 0.20.0-2ubuntu4.2
+expect "S24 noble's 0.20: not due" 1 "$(due66)"
+getent passwd sddm >/dev/null || sudo useradd --system --home-dir /var/lib/sddm --shell /usr/sbin/nologin sddm
+fake_deb sddm 0.21.0+git20250502.4fe234b-2ubuntu3 /etc/pam.d/sddm $'@include common-auth\n-auth   optional        pam_gnome_keyring.so\n-session optional       pam_gnome_keyring.so auto_start'
+fake_deb qt6-wayland 6.10.2-4
+expect "S24 26.04's 0.21 on GDM: due" 0 "$(due66)"
+step66
+expect "S24 SDDM is the display manager" /usr/bin/sddm "$(dm)"
+expect "S24 display-manager.service is SDDM's" /lib/systemd/system/sddm.service "$(readlink /etc/systemd/system/display-manager.service)"
+expect "S24 debconf's answer follows" sddm "$(sudo debconf-show sddm | awk -F': ' '/default-x-display-manager/ {print $2}')"
+check "S24 upstream's SDDM configuration" sh -c 'for f in 10-theme.conf 10-wayland.conf; do cmp -s "/etc/sddm.conf.d/$f" "$1/etc/sddm.conf.d/$f" || exit 1; done' _ "$OMARCHY_PATH"
+check "S24 the greeter's Hyprland config, a copy" sh -c 'cmp -s /usr/share/sddm/hyprland.lua "$1/default/sddm/hyprland.lua" && test ! -L /usr/share/sddm/hyprland.lua' _ "$OMARCHY_PATH"
+check "S24 Omarchy's theme" diff -r /usr/share/sddm/themes/omarchy "$OMARCHY_PATH/default/sddm/omarchy"
+check "S24 no keyring unlock at a password login" sh -c '! grep -q "^-auth.*pam_gnome_keyring" /etc/pam.d/sddm && grep -q "^-session.*pam_gnome_keyring" /etc/pam.d/sddm'
+expect "S24 GDM's automatic login carried over" $'[Autologin]\nUser=tester\nSession=omarchy.desktop' "$(cat /etc/sddm.conf.d/autologin.conf 2>/dev/null)"
+expect "S24 the greeter offers the user and session first" $'[Last]\nSession=omarchy.desktop\nUser=tester' "$(sudo cat /var/lib/sddm/state.conf 2>/dev/null)"
+expect "S24 set up: not due" 1 "$(due66)"
+echo '-- upstream changed this' >>"$OMARCHY_PATH/default/sddm/hyprland.lua"
+sudo touch /usr/share/sddm/themes/omarchy/dropped-upstream.png
+expect "S24 upstream's files changed: due" 0 "$(due66)"
+step66
+check "S24 the greeter's config follows upstream's" cmp -s /usr/share/sddm/hyprland.lua "$OMARCHY_PATH/default/sddm/hyprland.lua"
+check "S24 a theme file upstream dropped goes" test ! -e /usr/share/sddm/themes/omarchy/dropped-upstream.png
+check "S24 an update switches nothing again" sh -c '! grep -q "automatic login\|the display manager, from the next boot" /tmp/s24.log'
+# A switch cut short after the unit: the file names SDDM, the unit is GDM's.
+sudo ln -sf /lib/systemd/system/gdm3.service /etc/systemd/system/display-manager.service
+step66
+expect "S24 a switch cut short is finished" /lib/systemd/system/sddm.service "$(readlink /etc/systemd/system/display-manager.service)"
+echo /usr/sbin/gdm3 | sudo tee /etc/X11/default-display-manager >/dev/null
+echo '-- and again' >>"$OMARCHY_PATH/default/sddm/hyprland.lua"
+expect "S24 GDM chosen back by hand stays" 1 "$(due66)"
+git -C "$OMARCHY_PATH" checkout -q -- default/sddm/hyprland.lua
+echo /usr/bin/sddm | sudo tee /etc/X11/default-display-manager >/dev/null
+step66 --undo
+expect "S24 --undo: GDM again" /usr/sbin/gdm3 "$(dm)"
+expect "S24 --undo: its unit" /lib/systemd/system/gdm3.service "$(readlink /etc/systemd/system/display-manager.service)"
+expect "S24 declined: not due" 1 "$(due66)"
+# GDM's automatic login turned off meanwhile: SDDM's goes with it.
+sudo sed -i 's/^AutomaticLoginEnable=True/AutomaticLoginEnable=False/' /etc/gdm3/custom.conf
+step66
+expect "S24 a plain run takes SDDM again" /usr/bin/sddm "$(dm)"
+check "S24 and drops the decline" test ! -e "$PORT/.applied/66-sddm-declined"
+check "S24 no automatic login where GDM has none" test ! -e /etc/sddm.conf.d/autologin.conf
+# The updater on a machine set up before the step had SDDM: due, once.
+step66 --undo
+rm -f "$PORT/.applied/66-sddm-declined" "$PORT/.applied/66-sddm.sha256"
+omarchy-update-ubuntu -y >/tmp/s24u.log 2>&1 || { ko "S24 updater exit"; onfail /tmp/s24u.log; }
+check "S24 the updater runs the step" grep -q "SDDM with Omarchy's theme (root)." /tmp/s24u.log
+expect "S24 and SDDM is the display manager" /usr/bin/sddm "$(dm)"
+omarchy-update-ubuntu -y >/tmp/s24v.log 2>&1 || { ko "S24 updater exit, again"; onfail /tmp/s24v.log; }
+check "S24 the next update leaves it" sh -c "! grep -q 'SDDM with Omarchy' /tmp/s24v.log"
+# An admin's mask on display-manager.service stays.
+sudo ln -sf /dev/null /etc/systemd/system/display-manager.service
+echo /usr/sbin/gdm3 | sudo tee /etc/X11/default-display-manager >/dev/null
+rm -f "$PORT/.applied/66-sddm.sha256"
+expect "S24 masked: not due" 1 "$(due66)"
+step66
+expect "S24 masked: the mask stays" /dev/null "$(readlink /etc/systemd/system/display-manager.service)"
+expect "S24 masked: the display manager stays" /usr/sbin/gdm3 "$(dm)"
+sudo dpkg -r sddm qt6-wayland >/dev/null
+sudo rm -rf /etc/X11/default-display-manager /etc/systemd/system/display-manager.service /usr/sbin/gdm3 /etc/gdm3 \
+  /etc/sddm.conf.d /usr/share/sddm /var/lib/sddm "$PORT/.applied/66-sddm.sha256"
+rm -rf "$HOME/fake-sddm" "$HOME/fake-sddm.deb" "$HOME/fake-qt6-wayland" "$HOME/fake-qt6-wayland.deb"
+
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
 # bootstrap refuses a channel other than the recorded one: set aside, as a

@@ -461,6 +461,14 @@ if REPO_DIR=$PORT_DIR "$PORT_DIR/install/13-intel-media-root.sh" --due; then
   run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" OMARCHY_INTEL_MEDIA="${OMARCHY_INTEL_MEDIA:-}" "$PORT_DIR/install/13-intel-media-root.sh"
 fi
 
+# Upstream's login screen, SDDM with Omarchy's theme, where the release's SDDM
+# runs it (step 66): on a machine still on GDM, at the next boot, unless its
+# owner went back to GDM; then upstream's SDDM files, as they change.
+if REPO_DIR=$PORT_DIR "$PORT_DIR/install/66-session-root.sh" --due; then
+  echo "SDDM with Omarchy's theme (root)."
+  run_root env OMARCHY_USER="$USER" REPO_DIR="$PORT_DIR" "$PORT_DIR/install/66-session-root.sh"
+fi
+
 unhandled=$(REPO_DIR=$PORT_DIR "$PORT_DIR/install/57-system-tweaks-root.sh" --unhandled)
 if [[ -n $unhandled ]]; then
   echo -e "\e[33mNew under upstream's etc/, neither installed nor skipped by the port's step 57:\e[0m"

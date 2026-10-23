@@ -1,4 +1,4 @@
-From 8fa8cde8dff848a44c4030039f3ed2bd8880cd71 Mon Sep 17 00:00:00 2001
+From ba6a624b0dbd47d942408b892057f0bf002721e5 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:08:29 -0300
 Subject: [PATCH 04/13] Ubuntu port: render the foot theme into [colors]
