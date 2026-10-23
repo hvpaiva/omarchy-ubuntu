@@ -200,6 +200,14 @@ github_release_download() {
 # apt_installed <pkg>
 apt_installed() { [[ $(dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null) == ?i* ]]; }
 
+# apt_candidate <pkg>: the version apt would install, nothing when no source
+# has one. apt-cache policy's labels are translated ("Candidato:" in pt_BR,
+# which sudo's PAM hands every root step from /etc/default/locale), so it is
+# read in C.
+apt_candidate() {
+  LC_ALL=C apt-cache policy -- "$1" 2>/dev/null | awk '$1 == "Candidate:" && $2 != "(none)" { print $2 }'
+}
+
 # apt_source_active <uri> <suite>: an enabled apt source serves the suite from
 # the URI. A release upgrade turns every third-party source off (Enabled: no)
 # and leaves it at the old release, so its file alone says nothing. grep reads

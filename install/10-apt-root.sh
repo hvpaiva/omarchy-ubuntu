@@ -52,8 +52,8 @@ apt_retry update -qq
 
 # Omarchy's editor config is LazyVim's, which wants neovim 0.11.2; noble's
 # archive has 0.9, 26.04's a current one.
-nvim=$(apt-cache policy neovim | awk '/^  Candidate:/ { print $2 }')
-if [[ -z $nvim || $nvim == "(none)" ]] || dpkg --compare-versions "$nvim" lt 0.11.2; then
+nvim=$(apt_candidate neovim)
+if [[ -z $nvim ]] || dpkg --compare-versions "$nvim" lt 0.11.2; then
   log "Neovim PPA (neovim-ppa/stable): the archive's neovim is ${nvim:-none}"
   ppa_source neovim-ppa/stable
   apt_retry update -qq
@@ -84,8 +84,7 @@ mapfile -t build < <(read_list "$REPO_DIR/packages/apt-build.txt")
 
 packaged=()
 while read -r p; do
-  candidate=$(apt-cache policy "$p" | awk '/^  Candidate:/ { print $2 }')
-  [[ -z $candidate || $candidate == "(none)" ]] || packaged+=("$p")
+  [[ -z $(apt_candidate "$p") ]] || packaged+=("$p")
 done < <(read_list "$REPO_DIR/packages/apt-if-packaged.txt")
 
 log "apt packages"

@@ -22,12 +22,11 @@ theme=/usr/share/sddm/themes/omarchy
 # What Omarchy's settings package installs for SDDM, from the checkout.
 config_files=(etc/sddm.conf.d/10-theme.conf etc/sddm.conf.d/10-wayland.conf)
 
-sddm_candidate() { apt-cache policy sddm 2>/dev/null | awk '$1 == "Candidate:" { print $2 }'; }
 # The theme's metadata asks for the Qt 6 greeter, which SDDM has from 0.21.
 sddm_runs_theme() {
   local candidate
-  candidate=$(sddm_candidate)
-  [[ -n $candidate && $candidate != "(none)" ]] && dpkg --compare-versions "$candidate" ge 0.21
+  candidate=$(apt_candidate sddm)
+  [[ -n $candidate ]] && dpkg --compare-versions "$candidate" ge 0.21
 }
 
 # The display manager as the Debian packages read it, the name of the daemon
@@ -102,9 +101,8 @@ else
 fi
 
 if ! sddm_runs_theme; then
-  candidate=$(sddm_candidate)
-  [[ -n $candidate && $candidate != "(none)" ]] || candidate=none
-  note "Omarchy's theme needs SDDM 0.21, Ubuntu $UBUNTU_VERSION offers $candidate: GDM stays the display manager"
+  candidate=$(apt_candidate sddm)
+  note "Omarchy's theme needs SDDM 0.21, Ubuntu $UBUNTU_VERSION offers ${candidate:-none}: GDM stays the display manager"
   exit 0
 fi
 
