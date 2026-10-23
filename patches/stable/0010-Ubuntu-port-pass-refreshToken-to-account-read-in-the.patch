@@ -1,4 +1,4 @@
-From e4132f2b52f190fce2f2a27bec89354a56fa2f14 Mon Sep 17 00:00:00 2001
+From b1980f8383aebb21cf8a105556307eb576408da3 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Thu, 24 Sep 2026 09:49:03 -0300
 Subject: [PATCH 10/13] Ubuntu port: pass refreshToken to account/read in the

@@ -147,7 +147,7 @@ migrations=$(grep -n $'\e\\[32mMigrations' /tmp/s3.log | head -1 | cut -d: -f1)
 [[ -n $pieces && -n $migrations ]] && (( pieces < migrations )) && ok "S3 root pieces reapplied before the migrations" || ko "S3 root pieces reapplied before the migrations (lines $pieces, $migrations)"
 # Before 4.5 the port's migrations that stand in for upstream's have nothing
 # to stand in for: pending. The ones for the port's own pieces run on any tag.
-port_own_migrations=(1792714753-denoise-linger.sh)
+port_own_migrations=(1792714753-denoise-linger.sh 1792740142-mise-recipe-wrappers.sh)
 check "S3 the old helper's grant stays on 4.0.x" sudo test -f /etc/sudoers.d/99-omarchy-nopasswd-tester
 expect "S3 only the port's own migrations recorded before 4.5" "${port_own_migrations[*]}" "$(ls "$PORT/.applied/migrations" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
 expect "S3 pending port migrations say so" "$(( $(find "$PORT/migrations" -name '*.sh' ! -name '*-root.sh' | wc -l) - ${#port_own_migrations[@]} ))" "$(grep -c "left pending, not applicable yet" /tmp/s3.log)"
@@ -506,6 +506,110 @@ apps_after=$(common base_apps)
 [[ " $apps_before " == *" omacalc "* && " $apps_after " != *" omacalc "* ]] && ok "S19 a removed companion app is not rebuilt" || ko "S19 a removed companion app is not rebuilt ($apps_before -> $apps_after)"
 rm -f "$HOME/.local/state/omarchy/preinstalls-removed"
 
+echo "== S28 the default set after a release upgrade, and the mise recipes"
+expect "S28 dpkg names: an apt name" cowsay "$(omarchy-pkg-ubuntu dpkg-names cowsay)"
+expect "S28 dpkg names: a .deb recipe" aether "$(omarchy-pkg-ubuntu dpkg-names aether)"
+expect "S28 dpkg names: none for a mise recipe" "" "$(omarchy-pkg-ubuntu dpkg-names starship)"
+# Step 47 against a set of three and a resolver that has none of them, sees
+# every name but the mise tool as dpkg's, and records what it is asked to add.
+s28=$HOME/s28
+mkdir -p "$s28/omarchy/bin" "$s28/omarchy/install"
+printf '%s\n' had-it removed-by-hand a-mise-tool >"$s28/omarchy/install/omarchy-base.packages"
+cat >"$s28/omarchy/bin/omarchy-pkg-ubuntu" <<'EOF'
+#!/bin/bash
+case $1 in
+  installed) exit 1 ;;
+  dpkg-names) [[ $2 == a-mise-tool ]] || echo "$2" ;;
+  add) shift && echo "$*" >>"$HOME/s28/added" ;;
+esac
+EOF
+chmod +x "$s28/omarchy/bin/omarchy-pkg-ubuntu"
+step47() { : >"$s28/added"; (cd "$PORT" && OMARCHY_PATH=$s28/omarchy REPO_DIR=$PORT ./install/47-base-packages.sh "$@") >/tmp/s28.log 2>&1 || onfail /tmp/s28.log; cat "$s28/added"; }
+printf '%s\n' had-it libc6 >"$PORT/.applied/dpkg-packages"
+expect "S28 --release: only what dpkg had before the upgrade comes back" had-it "$(step47 --release)"
+rm -f "$PORT/.applied/dpkg-packages"
+expect "S28 --release without the record: every name dpkg holds" "had-it removed-by-hand" "$(step47 --release)"
+expect "S28 at bootstrap: the whole set" "had-it removed-by-hand a-mise-tool" "$(step47)"
+check "S28 and, at its end, the record of what dpkg has" grep -qx bash "$PORT/.applied/dpkg-packages"
+rm -rf "$s28/omarchy"
+# mise as far as the recipes use it: use --path writes the file it names,
+# --remove takes a tool out, where and ls --json answer from the user's config
+# and the port's, and every call is recorded.
+user_mise=$HOME/.config/mise/config.toml
+port_mise=$HOME/.config/mise/conf.d/omarchy-ubuntu.toml
+cat >"$HOME/shims/mise" <<'EOF'
+#!/bin/bash
+echo "$*" >>"$HOME/s28/mise.calls"
+configs=("$HOME/.config/mise/conf.d/omarchy-ubuntu.toml" "$HOME/.config/mise/config.toml")
+case $1 in
+  use)
+    shift
+    file="" remove=""
+    while [[ $1 == -* ]]; do
+      case $1 in
+        --path) file=$2 && shift 2 ;;
+        --remove) remove=$2 && shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    if [[ -n $remove ]]; then
+      sed -i "/^$remove = /d" "$file"
+    else
+      [[ -s $file ]] || echo '[tools]' >"$file"
+      echo "$1 = \"latest\"" >>"$file"
+    fi
+    ;;
+  where) grep -qs "^$2 = " "${configs[@]}" || exit 1 ;;
+  ls)
+    sep="" && printf '['
+    for f in "${configs[@]}"; do
+      grep -qs "^${*: -1} = " "$f" && printf '%s{"source":{"path":"%s"}}' "$sep" "$f" && sep=,
+    done
+    printf ']\n'
+    ;;
+esac
+EOF
+chmod +x "$HOME/shims/mise"
+mkdir -p "${user_mise%/*}"
+printf '[tools]\nnode = "22"\n' >"$user_mise"
+cp "$user_mise" "$s28/config.toml.before"
+: >"$s28/mise.calls"
+omarchy-pkg-ubuntu add lazygit >/tmp/s28m.log 2>&1 || { ko "S28 add lazygit exit"; onfail /tmp/s28m.log; }
+check "S28 a mise recipe declares its tool in the port's file" grep -qx 'lazygit = "latest"' "$port_mise"
+check "S28 and leaves the user's config.toml as it was" cmp -s "$user_mise" "$s28/config.toml.before"
+check "S28 and writes no wrapper" test ! -e "$HOME/.local/bin/lazygit"
+check "S28 installed, as mise reports it" omarchy-pkg-ubuntu installed lazygit
+omarchy-pkg-ubuntu add helix >/tmp/s28m.log 2>&1 || { ko "S28 add helix exit"; onfail /tmp/s28m.log; }
+expect "S28 helix, a command Arch names otherwise than the binary, runs the shim" $'#!/bin/sh\nexec hx "$@"' "$(cat "$HOME/.local/bin/helix" 2>/dev/null)"
+omarchy-pkg-ubuntu remove lazygit helix >/tmp/s28m.log 2>&1 || { ko "S28 remove exit"; onfail /tmp/s28m.log; }
+check "S28 removed: out of the port's file" sh -c "! grep -qE '^(lazygit|helix) =' '$port_mise'"
+check "S28 and uninstalled" sh -c "grep -qx 'uninstall --all lazygit' '$s28/mise.calls' && grep -qx 'uninstall --all helix' '$s28/mise.calls'"
+check "S28 and helix's launcher gone" test ! -e "$HOME/.local/bin/helix"
+omarchy-pkg-ubuntu add starship >/dev/null 2>&1
+echo 'starship = "latest"' >>"$user_mise"
+out=$(omarchy-pkg-ubuntu remove starship 2>&1)
+check "S28 a tool the user's config also declares stays installed" sh -c "! grep -qx 'uninstall --all starship' '$s28/mise.calls'"
+check "S28 and the removal says where" grep -qF "still declared in $user_mise" <<<"$out"
+# The wrappers the recipes left before, as the writers wrote them: the
+# checkout's omarchy-mise-install (the port's form) and the tag's (upstream's).
+tag=$(git -C "$OMARCHY_PATH" describe --tags --abbrev=0)
+git -C "$OMARCHY_PATH" show "$tag:bin/omarchy-mise-install" >"$s28/upstream-mise-install"
+cp "$user_mise" "$s28/config.toml.before"
+omarchy-mise-install starship starship starship
+bash "$s28/upstream-mise-install" lazygit lazygit lazygit
+omarchy-mise-install usage usage usage && echo '# mine' >>"$HOME/.local/bin/usage"
+omarchy-mise-install helix helix hx
+echo 'helix = "latest"' >>"$user_mise"
+cp "$user_mise" "$s28/config.toml.before"
+(OMARCHY_PATH=$OMARCHY_PATH PORT_DIR=$PORT bash -euo pipefail "$PORT/migrations/1792740142-mise-recipe-wrappers.sh") >/tmp/s28g.log 2>&1 || { ko "S28 the wrappers migration exit"; onfail /tmp/s28g.log; }
+check "S28 migration: a wrapper in the port's form goes" test ! -e "$HOME/.local/bin/starship"
+check "S28 migration: one in upstream's form goes" test ! -e "$HOME/.local/bin/lazygit"
+check "S28 migration: one the user edited stays" grep -qx '# mine' "$HOME/.local/bin/usage"
+expect "S28 migration: helix's becomes the launcher while mise has helix" $'#!/bin/sh\nexec hx "$@"' "$(cat "$HOME/.local/bin/helix" 2>/dev/null)"
+check "S28 migration: the user's config.toml as it was" cmp -s "$user_mise" "$s28/config.toml.before"
+check "S28 migration: and says the lines stay" grep -q "stays; take it out there" /tmp/s28g.log
+rm -rf "$s28" "$HOME/.config/mise" "$HOME/shims/mise" "$HOME/.local/bin/usage" "$HOME/.local/bin/helix"
+
 echo "== S20 Intel's media stack: due at an update on the xe driver, unless declined"
 due() { (cd "$PORT" && env REPO_DIR="$PORT" "$@" ./install/13-intel-media-root.sh --due) >/dev/null 2>&1; echo $?; }
 # The container sees the host's PCI devices.
@@ -589,7 +693,7 @@ r3_steps=(10-apt-root 12-chromium-root 15-extra-debs-root 55-root 57-system-twea
 for s in "${r3_steps[@]}"; do
   printf '#!/bin/bash\n[[ $* != --sudo-due ]] || exit 1\necho "%s $*" >>%s\n' "$s" "$r3_log" >"$PORT/install/$s.sh"
 done
-release_steps=$'10-apt-root --release\n12-chromium-root --release\n15-extra-debs-root --release\n55-root \n57-system-tweaks-root \n58-system-extras-root \n70-browser-policy-root \n47-base-packages '
+release_steps=$'10-apt-root --release\n12-chromium-root --release\n15-extra-debs-root --release\n55-root \n57-system-tweaks-root \n58-system-extras-root \n70-browser-policy-root \n47-base-packages --release'
 echo 22.04 >"$PORT/.applied/ubuntu-release"
 omarchy-update-ubuntu -y >/tmp/r3.log 2>&1; st=$?
 expect "R3 updater exit" 0 "$st"
@@ -600,6 +704,7 @@ expect "R3 the new release recorded" "$release" "$(cat "$PORT/.applied/ubuntu-re
 : >"$r3_log"
 omarchy-update-ubuntu -y >/tmp/r3b.log 2>&1 || onfail /tmp/r3b.log
 check "R3 once: the next update runs none of them for the release" sh -c "! grep -q -- --release '$r3_log' && ! grep -q 'Ubuntu 22.04 to' /tmp/r3b.log"
+check "R3 and on the release it already ran on, it records what dpkg has for the next one" grep -qx '47-base-packages --snapshot' "$r3_log"
 # A port older than the record: the release Quickshell's binary names.
 rm -f "$PORT/.applied/ubuntu-release"
 mkdir -p "$HOME/.local/bin"

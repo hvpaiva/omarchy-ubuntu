@@ -1,4 +1,4 @@
-From 14da985b44a1f21760abca205aade6d67ea1e146 Mon Sep 17 00:00:00 2001
+From a9da1a74a7f5c7fd8e2aac45fb0ec4b0caab2845 Mon Sep 17 00:00:00 2001
 From: Highlander Paiva <highlander.paiva@rdstation.com>
 Date: Tue, 22 Sep 2026 22:55:23 -0300
 Subject: [PATCH 05/12] Ubuntu port: foot cursor colour in a [cursor] section
