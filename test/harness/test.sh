@@ -646,7 +646,7 @@ fake_deb() { # fake_deb <package> <version> [<path> <content>]...: dpkg has the 
   done
   dpkg-deb --root-owner-group --build "$root" "$root.deb" >/dev/null && sudo dpkg -i "$root.deb" >/dev/null
 }
-step66() { (cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester ./install/66-session-root.sh "$@") >/tmp/s24.log 2>&1 || onfail /tmp/s24.log; }
+step66() { (cd "$PORT" && sudo env REPO_DIR="$PORT" OMARCHY_USER=tester ./install/66-session-root.sh "$@") >/tmp/s24.log 2>&1 || { ko "S24 step 66 $* exit"; onfail /tmp/s24.log; }; }
 due66() { (cd "$PORT" && REPO_DIR=$PORT ./install/66-session-root.sh --due) >/dev/null 2>&1; echo $?; }
 dm() { cat /etc/X11/default-display-manager 2>/dev/null; }
 # A desktop install's GDM, automatic login on; the image has no apt lists, so
@@ -678,10 +678,16 @@ expect "S24 GDM's automatic login carried over" $'[Autologin]\nUser=tester\nSess
 expect "S24 the greeter offers the user and session first" $'[Last]\nSession=omarchy.desktop\nUser=tester' "$(sudo cat /var/lib/sddm/state.conf 2>/dev/null)"
 expect "S24 set up: not due" 1 "$(due66)"
 echo '-- upstream changed this' >>"$OMARCHY_PATH/default/sddm/hyprland.lua"
+sudo touch /usr/share/sddm/themes/omarchy/dropped-upstream.png
 expect "S24 upstream's files changed: due" 0 "$(due66)"
 step66
 check "S24 the greeter's config follows upstream's" cmp -s /usr/share/sddm/hyprland.lua "$OMARCHY_PATH/default/sddm/hyprland.lua"
+check "S24 a theme file upstream dropped goes" test ! -e /usr/share/sddm/themes/omarchy/dropped-upstream.png
 check "S24 an update switches nothing again" sh -c '! grep -q "automatic login\|the display manager, from the next boot" /tmp/s24.log'
+# A switch cut short after the unit: the file names SDDM, the unit is GDM's.
+sudo ln -sf /lib/systemd/system/gdm3.service /etc/systemd/system/display-manager.service
+step66
+expect "S24 a switch cut short is finished" /lib/systemd/system/sddm.service "$(readlink /etc/systemd/system/display-manager.service)"
 echo /usr/sbin/gdm3 | sudo tee /etc/X11/default-display-manager >/dev/null
 echo '-- and again' >>"$OMARCHY_PATH/default/sddm/hyprland.lua"
 expect "S24 GDM chosen back by hand stays" 1 "$(due66)"
@@ -691,13 +697,28 @@ step66 --undo
 expect "S24 --undo: GDM again" /usr/sbin/gdm3 "$(dm)"
 expect "S24 --undo: its unit" /lib/systemd/system/gdm3.service "$(readlink /etc/systemd/system/display-manager.service)"
 expect "S24 declined: not due" 1 "$(due66)"
+# GDM's automatic login turned off meanwhile: SDDM's goes with it.
+sudo sed -i 's/^AutomaticLoginEnable=True/AutomaticLoginEnable=False/' /etc/gdm3/custom.conf
+step66
+expect "S24 a plain run takes SDDM again" /usr/bin/sddm "$(dm)"
+check "S24 and drops the decline" test ! -e "$PORT/.applied/66-sddm-declined"
+check "S24 no automatic login where GDM has none" test ! -e /etc/sddm.conf.d/autologin.conf
 # The updater on a machine set up before the step had SDDM: due, once.
+step66 --undo
 rm -f "$PORT/.applied/66-sddm-declined" "$PORT/.applied/66-sddm.sha256"
-omarchy-update-ubuntu -y >/tmp/s24u.log 2>&1 || onfail /tmp/s24u.log
+omarchy-update-ubuntu -y >/tmp/s24u.log 2>&1 || { ko "S24 updater exit"; onfail /tmp/s24u.log; }
 check "S24 the updater runs the step" grep -q "SDDM with Omarchy's theme (root)." /tmp/s24u.log
 expect "S24 and SDDM is the display manager" /usr/bin/sddm "$(dm)"
-omarchy-update-ubuntu -y >/tmp/s24v.log 2>&1 || onfail /tmp/s24v.log
+omarchy-update-ubuntu -y >/tmp/s24v.log 2>&1 || { ko "S24 updater exit, again"; onfail /tmp/s24v.log; }
 check "S24 the next update leaves it" sh -c "! grep -q 'SDDM with Omarchy' /tmp/s24v.log"
+# An admin's mask on display-manager.service stays.
+sudo ln -sf /dev/null /etc/systemd/system/display-manager.service
+echo /usr/sbin/gdm3 | sudo tee /etc/X11/default-display-manager >/dev/null
+rm -f "$PORT/.applied/66-sddm.sha256"
+expect "S24 masked: not due" 1 "$(due66)"
+step66
+expect "S24 masked: the mask stays" /dev/null "$(readlink /etc/systemd/system/display-manager.service)"
+expect "S24 masked: the display manager stays" /usr/sbin/gdm3 "$(dm)"
 sudo dpkg -r sddm qt6-wayland >/dev/null
 sudo rm -rf /etc/X11/default-display-manager /etc/systemd/system/display-manager.service /usr/sbin/gdm3 /etc/gdm3 \
   /etc/sddm.conf.d /usr/share/sddm /var/lib/sddm "$PORT/.applied/66-sddm.sha256"

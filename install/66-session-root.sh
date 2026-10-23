@@ -42,8 +42,13 @@ manifest() {
   (cd "$OMARCHY_PATH" && { printf '%s\n' "${config_files[@]}"; find default/sddm -type f | LC_ALL=C sort; } | xargs -r sha256sum)
 }
 
+dm_unit=/etc/systemd/system/display-manager.service
+# An admin's mask, which the display managers' maintainer scripts leave too.
+dm_masked() { [[ $(readlink "$dm_unit" 2>/dev/null) == /dev/null ]]; }
+
 if [[ ${1:-} == --due ]]; then
   [[ ! -f $declined ]] && sddm_runs_theme || exit 1
+  ! dm_masked || exit 1
   [[ -f $applied ]] || exit 0
   [[ $(display_manager) == sddm ]] && ! manifest | cmp -s - "$applied"
   exit
@@ -55,19 +60,20 @@ decline() {
   install -m 644 -o "$OMARCHY_USER" -g "$OMARCHY_USER" /dev/null "$declined"
 }
 
-# What the display managers' own maintainer scripts do with the choice: the
-# daemon in /etc/X11/default-display-manager, debconf's shared answer, and
-# display-manager.service, the alias both units claim. A later upgrade of
-# either package reads the file and keeps the choice.
+# What the display managers' own maintainer scripts do with the choice:
+# debconf's shared answer, display-manager.service (the alias both units
+# claim), and the daemon in /etc/X11/default-display-manager. A later upgrade
+# of either package reads the file and links the unit after it, so the file
+# goes last: a run cut short before it leaves the switch still to do.
 make_display_manager() { # make_display_manager <package> <daemon>
-  printf '%s\n' "$2" >/etc/X11/default-display-manager
   echo "$1 shared/default-x-display-manager select $1" | debconf-set-selections
-  ln -sf "/lib/systemd/system/$1.service" /etc/systemd/system/display-manager.service
+  dm_masked || ln -sf "/lib/systemd/system/$1.service" "$dm_unit"
+  printf '%s\n' "$2" >/etc/X11/default-display-manager
 }
 
 if [[ ${1:-} == --undo ]]; then
   [[ -x /usr/sbin/gdm3 ]] || die "gdm3 is not installed: apt install gdm3, then this again"
-  if [[ $(display_manager) != gdm3 ]]; then
+  if [[ $(display_manager) != gdm3 || $(readlink "$dm_unit" 2>/dev/null) != /lib/systemd/system/gdm3.service ]]; then
     log "GDM the display manager again, from the next boot"
     make_display_manager gdm3 /usr/sbin/gdm3
   fi
@@ -115,7 +121,11 @@ gdm_autologin_user() {
 }
 
 switching=0
-[[ $(display_manager) == sddm ]] || switching=1
+if dm_masked; then
+  note "display-manager.service is masked: the display manager stays as it is"
+elif [[ $(display_manager) != sddm || $(readlink "$dm_unit" 2>/dev/null) != /lib/systemd/system/sddm.service ]]; then
+  switching=1
+fi
 
 log "SDDM with Omarchy's theme and its Hyprland greeter"
 # The greeter needs the package's own depends and Qt's Wayland platform plugin
@@ -139,6 +149,12 @@ install -d -m 0755 -o root -g root "$theme"
 while IFS= read -r f; do
   install_file 644 "$theme/$f" <"$OMARCHY_PATH/default/sddm/omarchy/$f"
 done < <(cd "$OMARCHY_PATH/default/sddm/omarchy" && find . -type f -printf '%P\n' | LC_ALL=C sort)
+# What upstream no longer ships goes, as a package upgrade takes it.
+while IFS= read -r f; do
+  [[ -f $OMARCHY_PATH/default/sddm/omarchy/$f ]] && continue
+  rm -f "$theme/$f"
+  note "removed   $theme/$f (not upstream's any more)"
+done < <(cd "$theme" && find . -type f -printf '%P\n')
 # Upstream's login/sddm.sh: a password login must not create an encrypted
 # login keyring beside Omarchy's passwordless default one.
 if [[ -f /etc/pam.d/sddm ]]; then
@@ -151,14 +167,21 @@ if (( switching )); then
   if [[ -n $user ]] && getent passwd "$user" >/dev/null && [[ $user =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
     log "GDM's automatic login for $user, now SDDM's"
     printf '[Autologin]\nUser=%s\nSession=omarchy.desktop\n' "$user" | install_file 644 /etc/sddm.conf.d/autologin.conf
+  elif [[ -e /etc/sddm.conf.d/autologin.conf ]]; then
+    rm -f /etc/sddm.conf.d/autologin.conf
+    note "removed   /etc/sddm.conf.d/autologin.conf: GDM logs no one in automatically"
   fi
-  # What Omarchy's installer records: the user and session the greeter offers first.
+  # What Omarchy's installer records: the user and session the greeter offers
+  # first. install replaces a link in the sddm user's directory, where a
+  # redirect would not follow it.
   install -d -m 0750 -o sddm -g sddm /var/lib/sddm
-  printf '[Last]\nSession=omarchy.desktop\nUser=%s\n' "$OMARCHY_USER" >/var/lib/sddm/state.conf
-  chown sddm:sddm /var/lib/sddm/state.conf
+  printf '[Last]\nSession=omarchy.desktop\nUser=%s\n' "$OMARCHY_USER" | install -m 644 -o sddm -g sddm /dev/stdin /var/lib/sddm/state.conf
   log "SDDM the display manager, from the next boot"
   make_display_manager sddm /usr/bin/sddm
   note "GDM back: sudo env REPO_DIR=$REPO_DIR $REPO_DIR/install/66-session-root.sh --undo"
+  if [[ $(cat "$OMARCHY_HOME/.local/share/keyrings/default" 2>/dev/null) != Default_keyring ]]; then
+    note "a password login does not unlock Ubuntu's login keyring under upstream's PAM: $REPO_DIR/bin/omarchy-keyring-passwordless, once, gives Omarchy's passwordless default keyring"
+  fi
 fi
 
 rm -f "$declined"

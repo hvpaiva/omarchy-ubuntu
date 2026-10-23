@@ -63,7 +63,8 @@ and pick `Omarchy (Hyprland uwsm)` in GDM once; autologin then targets it. On
 26.04, reboot: SDDM with Omarchy's theme takes over from GDM, offers that
 session first and keeps the automatic login GDM had;
 `install/66-session-root.sh --undo` (as root, with `REPO_DIR`) makes GDM the
-display manager again, and the updates leave it. Autologin
+display manager again, and the updates leave it. Autologin, and on 26.04 a
+password login in SDDM too (upstream's PAM leaves the keyring out of it),
 cannot unlock Ubuntu's `login` keyring, which is encrypted with your password;
 run `bin/omarchy-keyring-passwordless` once from a terminal to get Omarchy's
 passwordless default keyring (see [docs/gotchas.md](docs/gotchas.md)).
