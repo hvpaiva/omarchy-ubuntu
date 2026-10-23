@@ -171,17 +171,18 @@ archive (Hyprland from its PPA, Chromium, the `.deb` tools), turns every PPA
 and third-party source off, and makes sudo-rs the sudo. It may also ask about
 `/etc/cups/cups-files.conf`, which the port edits: either answer works, as the
 update after it puts the port's line back. Run
-`omarchy-update-ubuntu` once the machine is on 26.04. It sees the new release
+`omarchy-update-ubuntu` once the machine is on 26.04. Before anything else it
+goes back to classic sudo, which 4.5's update inhibitor requires, and asks for
+the sudo password a second time there: classic sudo keeps a credential cache
+of its own. It sees the new release
 (`.applied/ubuntu-release`) and runs once what a bootstrap on it would: the
 sources at the new release and the apt packages from them, the `.deb` tools
-built per release, classic sudo, the sudoers rules and system tweaks,
+built per release, the sudoers rules and system tweaks,
 upstream's default packages the upgrade removed, and the Install menu's
 `.deb`s built per release (Sunshine, umu-launcher) in the new release's build.
 Then every build that lost a library to the upgrade (the companion apps,
 Quickshell, the tools) is rebuilt, and SDDM with Omarchy's theme is set up to
 take over from GDM at the next boot, as on a new 26.04 install.
-Expect the sudo password a second time: the switch back to classic sudo starts
-a new credential cache.
 
 ### Channels
 
