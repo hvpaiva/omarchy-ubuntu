@@ -233,11 +233,16 @@ if [[ -n $target ]] && ! target_sha=$(git -C "$OMARCHY_PATH" rev-parse --verify 
 fi
 echo "Channel: $OMARCHY_CHANNEL   Current base: $base_before   Target: ${target:-none, the checkout is yours}"
 
-# The branch is at the target when it was built on exactly that commit and
-# carries the whole series and nothing the series dropped: a pin moved back,
-# a series that changed, or an upstream commit past a tag all read as an update.
+# The branch is at the target when it was built on exactly that commit, from
+# the series as it is now, and carries the whole series and nothing the series
+# dropped: a pin moved back, a series that changed, or an upstream commit past
+# a tag all read as an update. The scan knows the series' commits by subject,
+# so a patch reworked under its subject shows only against the series the last
+# build noted (lib/channel.sh); a branch built before the note is rebuilt once.
+# A fork's branch is its owner's build, from no series of the port's.
 at_target() {
-  [[ -n $base_sha && $base_sha == "$target_sha" && $OMARCHY_BRANCH_SERIES == "$series_size" && $OMARCHY_BRANCH_STALE == 0 ]]
+  [[ -n $base_sha && $base_sha == "$target_sha" && $OMARCHY_BRANCH_SERIES == "$series_size" && $OMARCHY_BRANCH_STALE == 0 ]] || return 1
+  [[ -n $OMARCHY_FORK ]] || channel_branch_built_from "$OMARCHY_PATH" "$BRANCH" "$series"
 }
 
 if [[ -z $target ]]; then
@@ -319,6 +324,7 @@ else
       echo -e "\n\e[31m\"$failed\" does not apply on $target; the checkout is back on $base_before. See omarchy-upstream-check --base $base_before --target $target.\e[0m" >&2
       exit 1
     fi
+    channel_branch_record "$OMARCHY_PATH" "$BRANCH" "$series"
   fi
   echo "Port patches on top of $target: $(git -C "$OMARCHY_PATH" rev-list --count "$target..$BRANCH")"
 fi

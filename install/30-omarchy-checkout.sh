@@ -60,6 +60,7 @@ else
     git -c commit.gpgsign=false rebase --quiet --onto "$target" "$series_base" "$OMARCHY_BRANCH" ||
       start_over "the series does not rebase onto $target; see omarchy-upstream-check --channel $OMARCHY_CHANNEL --target $target"
   fi
+  channel_branch_record "$OMARCHY_PATH" "$OMARCHY_BRANCH" "$series"
 fi
 
 note "omarchy $(git describe --tags --always) on the $OMARCHY_CHANNEL channel"
