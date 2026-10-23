@@ -184,6 +184,11 @@ if (( switching )); then
   if [[ $(cat "$OMARCHY_HOME/.local/share/keyrings/default" 2>/dev/null) != Default_keyring ]]; then
     note "a password login does not unlock Ubuntu's login keyring under upstream's PAM: $REPO_DIR/bin/omarchy-keyring-passwordless, once, gives Omarchy's passwordless default keyring"
   fi
+  # Ubuntu's fingerprint login sits in common-auth, which SDDM's PAM includes;
+  # the PAM stays as Ubuntu set it (docs/gotchas.md).
+  if grep -qs '^[^#]*pam_fprintd\.so' /etc/pam.d/common-auth; then
+    note "a password login waits for a fingerprint first (Ubuntu's fingerprint login, in common-auth): touch the reader, or wait for it to give up; docs/gotchas.md has the way out"
+  fi
 fi
 
 rm -f "$declined"
