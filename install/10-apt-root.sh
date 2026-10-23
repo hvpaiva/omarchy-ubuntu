@@ -48,12 +48,31 @@ EOF
   lists_superseded tailscale
 fi
 
+# Before the gate below read apt in C, a machine in another language saw no
+# neovim candidate where the archive's was new enough (26.04) and took the
+# neovim PPA, which has no build there: every apt update fails on it, this
+# step's own included. The source goes, before the update, where the archive's
+# neovim is new enough and apt has nothing from the PPA.
+stray_neovim_ppa() {
+  local file=/etc/apt/sources.list.d/neovim-ppa-ubuntu-stable-$UBUNTU_CODENAME.sources madison archive
+  [[ -f $file ]] || return 0
+  madison=$(apt-cache madison neovim 2>/dev/null) || true
+  ! grep -qF ppa.launchpadcontent.net/neovim-ppa/ <<<"$madison" || return 0
+  archive=$(awk -F' *[|] *' '{ print $2; exit }' <<<"$madison")
+  if [[ -z $archive ]] || dpkg --compare-versions "$archive" lt 0.11.2; then
+    return 0
+  fi
+  rm -f "$file"
+  note "removed   $file (the PPA has no neovim for $UBUNTU_CODENAME; the archive's $archive is new enough)"
+}
+stray_neovim_ppa
+
 apt_retry update -qq
 
 # Omarchy's editor config is LazyVim's, which wants neovim 0.11.2; noble's
 # archive has 0.9, 26.04's a current one.
-nvim=$(apt-cache policy neovim | awk '/^  Candidate:/ { print $2 }')
-if [[ -z $nvim || $nvim == "(none)" ]] || dpkg --compare-versions "$nvim" lt 0.11.2; then
+nvim=$(apt_candidate neovim)
+if [[ -z $nvim ]] || dpkg --compare-versions "$nvim" lt 0.11.2; then
   log "Neovim PPA (neovim-ppa/stable): the archive's neovim is ${nvim:-none}"
   ppa_source neovim-ppa/stable
   apt_retry update -qq
@@ -84,8 +103,7 @@ mapfile -t build < <(read_list "$REPO_DIR/packages/apt-build.txt")
 
 packaged=()
 while read -r p; do
-  candidate=$(apt-cache policy "$p" | awk '/^  Candidate:/ { print $2 }')
-  [[ -z $candidate || $candidate == "(none)" ]] || packaged+=("$p")
+  [[ -z $(apt_candidate "$p") ]] || packaged+=("$p")
 done < <(read_list "$REPO_DIR/packages/apt-if-packaged.txt")
 
 log "apt packages"

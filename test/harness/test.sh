@@ -791,6 +791,72 @@ sudo rm -rf /etc/X11/default-display-manager /etc/systemd/system/display-manager
   /etc/sddm.conf.d /usr/share/sddm /var/lib/sddm "$PORT/.applied/66-sddm.sha256"
 rm -rf "$HOME/fake-sddm" "$HOME/fake-sddm.deb" "$HOME/fake-qt6-wayland" "$HOME/fake-qt6-wayland.deb"
 
+echo "== S27 apt read in C, on a machine whose locale translates its labels"
+# apt-cache policy as a machine in Portuguese answers it unless the locale is
+# C, policy and madison with candidates from a table (the image has no apt
+# lists); apt-get and add-apt-repository record what they are asked, and an
+# apt update fails on a neovim PPA source, as where the PPA has no build. In
+# /usr/local/sbin, ahead of /usr/bin on the user's PATH and on sudo's
+# secure_path.
+s27_calls=$HOME/s27.calls
+if_packaged=$(grep -vE '^\s*(#|$)' "$PORT/packages/apt-if-packaged.txt" | head -n1)
+printf '%s\n' "neovim 0.11.6-1" "sddm 0.21.0+git20250502.4fe234b-2ubuntu3" "$if_packaged 1.0-1" "cowsay 3.03+dfsg2-8" >/tmp/s27.candidates
+cat >"$HOME/s27-apt-cache" <<'EOF'
+#!/bin/bash
+case $1 in
+  policy) shift ;;
+  madison)
+    shift
+    for p in "$@"; do
+      awk -v p="$p" '$1 == p { printf " %10s | %10s | http://archive.ubuntu.com/ubuntu x/universe amd64 Packages\n", p, $2 }' /tmp/s27.candidates
+    done
+    exit 0
+    ;;
+  *) exec /usr/bin/apt-cache "$@" ;;
+esac
+[[ ${1:-} != -- ]] || shift
+case ${LC_ALL:-${LC_MESSAGES:-${LANG:-C}}} in
+  C | C.* | POSIX) installed=Installed candidate=Candidate none='(none)' ;;
+  *) installed=Instalado candidate=Candidato none='(nenhum)' ;;
+esac
+for p in "$@"; do
+  version=$(awk -v p="$p" '$1 == p { print $2 }' /tmp/s27.candidates)
+  printf '%s:\n  %s: %s\n  %s: %s\n' "$p" "$installed" "$none" "$candidate" "${version:-$none}"
+done
+EOF
+printf '#!/bin/bash\ncase " $* " in\n  *" indextargets "* | *" -s "*) exec /usr/bin/apt-get "$@" ;;\nesac\necho "apt-get $*" >>%s\n[[ " $* " != *" update "* ]] || ! compgen -G "/etc/apt/sources.list.d/neovim-ppa-ubuntu-stable-*.sources" >/dev/null\n' "$s27_calls" >"$HOME/s27-apt-get"
+printf '#!/bin/bash\necho "add-apt-repository $*" >>%s\n' "$s27_calls" >"$HOME/s27-add-apt-repository"
+for t in apt-cache apt-get add-apt-repository; do sudo install -m 755 "$HOME/s27-$t" "/usr/local/sbin/$t"; done
+: >"$s27_calls"
+check "S27 apt-cache answers in Portuguese" sh -c 'LANG=pt_BR.UTF-8 apt-cache policy neovim | grep -qx "  Candidato: 0.11.6-1"'
+check "S27 and so to a root step" sh -c 'sudo env LANG=pt_BR.UTF-8 apt-cache policy neovim | grep -qx "  Candidato: 0.11.6-1"'
+# The sources step 10 would fetch keys for and add over the network, in place.
+printf 'Types: deb\nURIs: %s\nSuites: %s\nComponents: main\n\n' \
+  https://ppa.launchpadcontent.net/cppiber/hyprland/ubuntu/ "$codename" \
+  https://downloads.1password.com/linux/debian/amd64 stable \
+  https://pkgs.tailscale.com/stable/ubuntu "$codename" | sudo tee /etc/apt/sources.list.d/omarchy-s27.sources >/dev/null
+(cd "$PORT" && sudo env LANG=pt_BR.UTF-8 REPO_DIR="$PORT" OMARCHY_USER=tester ./install/10-apt-root.sh) >/tmp/s27.log 2>&1 || { ko "S27 step 10 exit"; onfail /tmp/s27.log; }
+check "S27 step 10: no neovim PPA where the archive's neovim is new enough" sh -c "! grep -q neovim-ppa '$s27_calls'"
+check "S27 step 10: what apt-if-packaged.txt lists and apt has, installed" grep -qE "^apt-get .* install .* $if_packaged( |\$)" "$s27_calls"
+# The neovim PPA as the gate's misread left it on 26.04, which every update since fails on.
+neovim_ppa=/etc/apt/sources.list.d/neovim-ppa-ubuntu-stable-$codename.sources
+printf 'Types: deb\nURIs: https://ppa.launchpadcontent.net/neovim-ppa/stable/ubuntu/\nSuites: %s\nComponents: main\n' "$codename" | sudo tee "$neovim_ppa" >/dev/null
+(cd "$PORT" && sudo env LANG=pt_BR.UTF-8 REPO_DIR="$PORT" OMARCHY_USER=tester ./install/10-apt-root.sh) >/tmp/s27b.log 2>&1; st=$?
+expect "S27 step 10 with the misread's neovim PPA in place: exit" 0 "$st"
+[[ $st == 0 ]] || onfail /tmp/s27b.log
+check "S27 and the PPA's source is gone" test ! -e "$neovim_ppa"
+sudo rm -f "$neovim_ppa"
+rm -f "$PORT/.applied/66-sddm-declined" "$PORT/.applied/66-sddm.sha256"
+expect "S27 step 66 reads SDDM's candidate: due" 0 "$(LANG=pt_BR.UTF-8 due66)"
+expect "S27 and as root" 0 "$( (cd "$PORT" && sudo env LANG=pt_BR.UTF-8 REPO_DIR="$PORT" OMARCHY_USER=tester ./install/66-session-root.sh --due) >/dev/null 2>&1; echo $?)"
+LANG=pt_BR.UTF-8 omarchy-pkg-ubuntu add cowsay >/tmp/s27r.log 2>&1 || { ko "S27 the resolver's add exit"; onfail /tmp/s27r.log; }
+check "S27 the resolver finds apt's candidate" grep -q -- "install -y --no-remove -- cowsay" "$s27_calls"
+sudo rm -f /usr/local/sbin/apt-cache /usr/local/sbin/apt-get /usr/local/sbin/add-apt-repository /etc/apt/sources.list.d/omarchy-s27.sources
+# What step 10 puts in place where a container lacks ImageMagick and libvips.
+grep -qs 'Ubuntu 24.04 ships ImageMagick 6' /usr/bin/magick && sudo rm -f /usr/bin/magick
+grep -qs 'whose vipsthumbnail takes -o' /usr/local/bin/vipsthumbnail && sudo rm -f /usr/local/bin/vipsthumbnail
+rm -f /tmp/s27.candidates "$s27_calls" "$HOME"/s27-*
+
 echo "== S10 edge bootstrap (the rc series on upstream's head; it may conflict as upstream moves)"
 # The channel file is in the home getent names, whatever HOME says, and the
 # bootstrap refuses a channel other than the recorded one: set aside, as a
