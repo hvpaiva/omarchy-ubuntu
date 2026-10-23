@@ -48,6 +48,25 @@ EOF
   lists_superseded tailscale
 fi
 
+# Before the gate below read apt in C, a machine in another language saw no
+# neovim candidate where the archive's was new enough (26.04) and took the
+# neovim PPA, which has no build there: every apt update fails on it, this
+# step's own included. The source goes, before the update, where the archive's
+# neovim is new enough and apt has nothing from the PPA.
+stray_neovim_ppa() {
+  local file=/etc/apt/sources.list.d/neovim-ppa-ubuntu-stable-$UBUNTU_CODENAME.sources madison archive
+  [[ -f $file ]] || return 0
+  madison=$(apt-cache madison neovim 2>/dev/null) || true
+  ! grep -qF ppa.launchpadcontent.net/neovim-ppa/ <<<"$madison" || return 0
+  archive=$(awk -F' *[|] *' '{ print $2; exit }' <<<"$madison")
+  if [[ -z $archive ]] || dpkg --compare-versions "$archive" lt 0.11.2; then
+    return 0
+  fi
+  rm -f "$file"
+  note "removed   $file (the PPA has no neovim for $UBUNTU_CODENAME; the archive's $archive is new enough)"
+}
+stray_neovim_ppa
+
 apt_retry update -qq
 
 # Omarchy's editor config is LazyVim's, which wants neovim 0.11.2; noble's
